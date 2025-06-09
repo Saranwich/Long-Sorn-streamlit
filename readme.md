@@ -50,7 +50,7 @@
 │   │
 │   └── 📁shared/                               // โค้ด Python ที่ใช้ร่วมกันใน Backend 
 │       ├── 📁db/                               //  จัดการการเชื่อมต่อ Database 
-│       ├── 📁models/                           //  Pydantic Models สำหรับกำหนดโครงสร้างข้อมูลที่รับ-ส่ง 
+│       ├── 📁models/                          // PydanticModelsสำหรับกำหนดโครงสร้างข้อมูลที่รับ-ส่ง 
 │       └── 📁core/                             //  Config หลัก เช่น การโหลด .env 
 │
 ├── 📁database/                                 // จัดการ Schema และ Migration ของฐานข้อมูล 
