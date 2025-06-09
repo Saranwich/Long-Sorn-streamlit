@@ -2,11 +2,11 @@
 
 > **Super AI Innovation**
 >**Team Members:**
-- "**Kiadtisak Preechanon** - ??? "         
-- "**Kittiphat Noikate**    - ??? "
-- "**Suphawadi Poolpuang**  - ??? "
-- "**Saranwich Pochai**     - ??? "
-- "**Krittikorn Sangthong** - ??? "
+- "**Kiadtisak Preechanon** - Frontend Programing "         
+- "**Suphawadi Poolpuang**  - Frontend UX/UI "
+- "**Kittiphat Noikate**    - Backend API-Database "
+- "**Krittikorn Sangthong** - Backend AI "
+- "**Saranwich Pochai**     - Backend DevOps "
 
 ---
 
@@ -14,66 +14,69 @@
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 📝 Long-Sorn project:
 │
-├── 📁.github/                          # Houses all GitHub-specific configurations, primarily for CI/CD.
-│   └── 📁workflows/                    # Contains CI/CD workflow definition files.
-│       ├── frontend_deploy.yml         # CI/CD: Deploys the frontend application to Vercel automatically.
-│       ├── backend_ci.yml              # CI: Runs tests for all backend services on every push.
-│       └── backend_deploy.yml          # CD: Deploys backend services to the OCI VM.
+├── 📁.github/
+│   └── 📁workflows/
+│       ├── frontend_deploy.yml                 // CI/CD: Deploy Frontend ไปยัง Vercel 
+│       ├── backend_ci.yml                      // CI: รันเทสสำหรับ Backend ทุก service 
+│       └── backend_deploy.yml                  // CD: Deploy Backend ไปยัง OCI VM 
 │
-├── 📁backend/                          # Main directory for all server-side Python services.
+├── 📁backend/                                  // โฟลเดอร์หลักสำหรับ Server-side ทั้งหมด 
 │   │
-│   ├── 📁services/                     # Contains the code for each individual, decoupled microservice.
+│   ├── 📁services/                             // ที่เก็บโค้ดของแต่ละ Microservice 
 │   │   │
-│   │   ├── 📁api_server/               # 1. Main Backend API Service (FastAPI).
-│   │   │   ├── 📁app/                  # Core application source code.
-│   │   │   │   ├── 📁routers/          # Holds API endpoint routers (users.py, videos.py).
-│   │   │   │   ├── dependencies.py     # Manages dependencies and shared logic for endpoints.
-│   │   │   │   └── main.py             # Entry point for the FastAPI application.
-│   │   │   ├── 📁tests/                # Unit and integration tests for the API service.
-│   │   │   ├── Dockerfile              # Defines the container image for this API service.
-│   │   │   └── requirements.txt        # Lists Python dependencies for this service.
+│   │   ├── 📁api_server/                       // Main API (FastAPI) - [ดูแลโดย: API & DB Dev] 
+│   │   │   ├── 📁app/                          // Source code หลัก 
+│   │   │   │   ├── 📁routers/                  // แยกไฟล์ตามกลุ่มของ API เช่น users.py, videos.py 
+│   │   │   │   ├── 📁core/                     //  จัดการ Config และการตั้งค่าต่างๆ
+│   │   │   │   └── main.py                     //  จุดเริ่มต้นของแอป FastAPI 
+│   │   │   ├── 📁tests/                        //  ที่เก็บเทสสำหรับ API service นี้ 
+│   │   │   ├── Dockerfile                      //  ไฟล์สำหรับสร้าง Container 
+│   │   │   └── requirements.txt                //  รายการ Library ของ Python 
 │   │   │
-│   │   ├── 📁video_worker/             # 2. Background service for video processing.
-│   │   │   ├── 📁app/                  # Core application source code for the worker.
-│   │   │   │   ├── processor.py        # Contains the main video processing logic using FFmpeg.
-│   │   │   │   └── main.py             # Entry point for the worker to pull jobs from the queue.
-│   │   │   ├── Dockerfile              # Defines the container image for the video worker.
-│   │   │   └── requirements.txt        # Lists Python dependencies for this worker.
+│   │   ├── 📁video_worker/                     // Service ประมวลผลวิดีโอ - [ดูแลโดย: AI Dev] 
+│   │   │   ├── 📁app/
+│   │   │   │   ├── processor.py                //  Logic หลักในการใช้ FFmpeg 
+│   │   │   │   └── main.py                     //  จุดเริ่มต้นในการดึงงานจาก Queue 
+│   │   │   ├── Dockerfile 
+│   │   │   └── requirements.txt 
 │   │   │
-│   │   └── 📁ai_orchestrator/          # 3. Service for orchestrating AI/ML tasks.
-│   │       ├── 📁app/                  # Core application source code for the AI service.
-│   │       │   ├── services/           # Logic for calling external APIs (e.g., Google STT, Gemini).
-│   │       │   ├── nlp_custom.py       # Contains the project's custom Natural Language Processing logic.
-│   │       │   └── main.py             # Entry point for the AI orchestration service.
-│   │       ├── Dockerfile              # Defines the container image for the AI service.
-│   │       └── requirements.txt        # Lists Python dependencies for this AI service.
+│   │   └── 📁ai_orchestrator/                  // Service จัดการ AI - [ดูแลโดย: AI Dev] 
+│   │       ├── 📁app/
+│   │       │   ├── 📁services/                 //  Logic การเรียก AI ภายนอก (Google STT, Gemini) 
+│   │       │   ├── nlp_custom.py               //  Logic NLP เฉพาะของโปรเจกต์ 
+│   │       │   └── main.py                     //  จุดเริ่มต้นของ AI service 
+│   │       ├── Dockerfile 
+│   │       └── requirements.txt 
 │   │
-│   └── 📁shared/                       # Shared Python code used across multiple backend services.
-│       ├── 📁db/                       # Manages database connection settings (PostgreSQL).
-│       ├── 📁models/                   # Contains shared Pydantic data models.
-│       └── 📁core/                     # Core configurations, such as environment variable loading.
+│   └── 📁shared/                               // โค้ด Python ที่ใช้ร่วมกันใน Backend 
+│       ├── 📁db/                               //  จัดการการเชื่อมต่อ Database 
+│       ├── 📁models/                           //  Pydantic Models สำหรับกำหนดโครงสร้างข้อมูลที่รับ-ส่ง 
+│       └── 📁core/                             //  Config หลัก เช่น การโหลด .env 
 │
-├── 📁database/                         # Manages database schema and migrations.
-│   └── 📁migrations/                   # Stores database schema migration scripts (e.g., for Alembic).
+├── 📁database/                                 // จัดการ Schema และ Migration ของฐานข้อมูล 
+│   └── 📁migrations/                           //  เก็บไฟล์ Migration script (เช่น Alembic) 
 │
-├── 📁docs/                             # Contains all project documentation.
-│   ├── architecture.png                # The system architecture diagram.
-│   ├── setup-guide.md                  # A guide for setting up the development environment.
-│   └── api_endpoints.md                # High-level API documentation (supplements Swagger UI).
+├── 📁docs/                                     // เอกสารทั้งหมดของโปรเจกต์ 
+│   ├── architecture.png                        //  แผนภาพสถาปัตยกรรม 
+│   └── api_endpoints.md                        //  คำอธิบาย API endpoint 
 │
-├── 📁frontend/                         # Main directory for the Next.js frontend application.
-│   ├── 📁public/                       # Stores static assets like images and fonts.
-│   ├── 📁src/                          # Main source code for the frontend application.
-│   │   ├── 📁app/                      # App Router directory for pages and layouts.
-│   │   ├── 📁components/               # Reusable React components.
-│   │   ├── 📁hooks/                    # Custom React hooks.
-│   │   └── 📁lib/                      # Library functions, API clients, etc.
-│   ├── 📁__tests__/                    # Contains all frontend tests (for Jest).
-│   ├── next.config.js                  # Configuration file for Next.js.
-│   ├── package.json                    # Defines project metadata and npm dependencies.
-│   └── tailwind.config.js              # Configuration file for Tailwind CSS.
+├── 📁frontend/                                 // โฟลเดอร์หลักสำหรับ Next.js 
+│   ├── 📁public/                               //  เก็บไฟล์ static เช่น รูปภาพ, font 
+│   ├── 📁src/                                  //  Source code หลักของ Frontend 
+│   │   ├── 📁app/                              //  (App Router) 
+│   │   ├── 📁components/                       //  React Components ที่ใช้ซ้ำ 
+│   │   │   ├── 📁ui/                           //  _// Dumb Components (Button, Input) - [ดูแลโดย: UX/UI Dev]_
+│   │   │   └── 📁features/                     //  _// Smart Components (ProfileForm) - [ดูแลโดย: Prog Dev]_
+│   │   ├── 📁hooks/                            //  Custom React hooks 
+│   │   └── 📁lib/                              //  ฟังก์ชันช่วยเหลือ, API clients 
+│   │
+│   ├── 📁__tests__/                            //  ที่เก็บเทสของฝั่ง Frontend 
+│   ├── next.config.mjs                         //  _// แก้ไขจาก .js เพื่อรองรับ ES Module ในเวอร์ชันใหม่_
+│   ├── package.json                            //  Dependencies และ script ของโปรเจกต์ 
+│   ├── tailwind.config.ts                      //  _// ใช้ .ts เพื่อให้ type-safe ยิ่งขึ้น_
+│   └── tsconfig.json                           //  _// ไฟล์ตั้งค่า TypeScript_
 │
-├── .gitignore                          # Specifies intentionally untracked files to ignore.
-├── docker_compose.yml                  # Defines and runs multi-container Docker applications for local development.
-└── README.md                           # Main project overview, setup instructions, and general information.
+├── .gitignore                                  //  ไฟล์และโฟลเดอร์ที่ Git จะไม่ติดตาม 
+├── docker-compose.yml                          //  ใช้สำหรับรัน Backend ทั้งหมดในเครื่อง local ด้วยคำสั่งเดียว 
+└── README.md                                   //  ภาพรวมและข้อมูลโปรเจกต์ 
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
