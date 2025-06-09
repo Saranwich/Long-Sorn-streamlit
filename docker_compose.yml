@@ -1,4 +1,4 @@
-# /docker-compose.yml
+# /docker_compose.yml
 
 version: '3.8' # เวอร์ชันของ Docker Compose
 
