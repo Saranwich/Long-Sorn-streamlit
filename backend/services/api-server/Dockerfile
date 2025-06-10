@@ -22,5 +22,4 @@ COPY ./app .
 # Step 7: บอก Docker ว่า Container นี้จะเปิด Port 8000 รอรับการเชื่อมต่อ
 EXPOSE 8000
 
-# หมายเหตุ: เราไม่ต้องใส่ CMD หรือ ENTRYPOINT ที่นี่
-# เพราะเราได้สั่งให้รันด้วย uvicorn ในไฟล์ docker-compose.yml อยู่แล้ว
+# หมายเหตุ: เราไม่ต้องใส่ CMD หรือ ENTRYPOINT ที่นี่เพราะเราได้สั่งให้รันด้วย uvicorn ในไฟล์ docker-compose.yml อยู่แล้ว
