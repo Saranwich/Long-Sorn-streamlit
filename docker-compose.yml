@@ -9,7 +9,7 @@ services:
     image: postgres:15-alpine # ใช้ Image ของ PostgreSQL เวอร์ชัน 15 (alpine คือเวอร์ชันเล็ก)
     container_name: longsorn-db
     volumes:
-      - longsorn_db_data:/var/lib/postgresql/data # ทำให้ข้อมูลใน DB ไม่หายไปเมื่อ stop container
+      - longsorn-db-data:/var/lib/postgresql/data # ทำให้ข้อมูลใน DB ไม่หายไปเมื่อ stop container
     environment:
       - POSTGRES_USER=${DB_USER} # ดึงค่าจากไฟล์ .env
       - POSTGRES_PASSWORD=${DB_PASSWORD}
@@ -20,16 +20,16 @@ services:
 
   # Service ที่ 2: Backend API (api_main)
   api:
-    container_name: longsorn_api
+    container_name: longsorn-api
     build:
-      context: ./backend/services/api_server # บอกว่าให้ไปหา Dockerfile ที่โฟลเดอร์นี้
+      context: ./backend/services/api-server # บอกว่าให้ไปหา Dockerfile ที่โฟลเดอร์นี้
       dockerfile: Dockerfile
     depends_on:
       - db # บอกว่าให้เริ่ม service 'db' ก่อน แล้วค่อยเริ่ม 'api'
     ports:
       - "8000:8000" # Map port 8000 ของ FastAPI
     volumes:
-      - ./services/api_main/app:/app # **สำคัญมาก:** ทำให้เมื่อเราแก้โค้ด .py บนเครื่องเรา มันจะอัปเดตใน container ทันที (Live Reload)
+      - ./backend/services/api-server/app:/app # **สำคัญมาก:** ทำให้เมื่อเราแก้โค้ด .py บนเครื่องเรา มันจะอัปเดตใน container ทันที (Live Reload)
     env_file:
       - .env # บอกให้ service นี้อ่านค่าจากไฟล์ .env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload # สั่งให้รัน FastAPI ในโหมด development
