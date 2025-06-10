@@ -17,7 +17,7 @@ COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Step 6: คัดลอกโค้ดทั้งหมดในโฟลเดอร์ app ของเราเข้าไปใน Container
-COPY ./app /app
+COPY ./app .
 
 # Step 7: บอก Docker ว่า Container นี้จะเปิด Port 8000 รอรับการเชื่อมต่อ
 EXPOSE 8000
