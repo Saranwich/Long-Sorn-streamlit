@@ -1,12 +1,10 @@
 # /docker-compose.yml
 
-version: '3.8' # เวอร์ชันของ Docker Compose
-
 services:
 
   # Service ที่ 1: Database (PostgreSQL)
   db:
-    image: postgres:15-alpine # ใช้ Image ของ PostgreSQL เวอร์ชัน 15 (alpine คือเวอร์ชันเล็ก)
+    image: postgres:latest # ใช้ Image ของ PostgreSQL 
     container_name: longsorn-db
     volumes:
       - longsorn-db-data:/var/lib/postgresql/data # ทำให้ข้อมูลใน DB ไม่หายไปเมื่อ stop container
@@ -35,4 +33,4 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload # สั่งให้รัน FastAPI ในโหมด development
 
 volumes:
-  longsorn_db_data: # ประกาศ volume ที่จะใช้เก็บข้อมูล DB
+  longsorn-db-data: # ประกาศ volume ที่จะใช้เก็บข้อมูล DB

@@ -1,0 +1,5 @@
+fastapi             # คือ Framework หลัก
+uvicorn[standard]   # คือ Server ที่ใช้รัน FastAPI
+sqlalchemy          # คือ Library ที่ใช้คุยกับ Database
+psycopg2-binary     # คือ Driver สำหรับเชื่อมต่อกับ PostgreSQL
+pydantic[email]     # คือ Library จัดการข้อมูล และ [email] คือส่วนเสริมสำหรับตรวจสอบ Format ของอีเมล
