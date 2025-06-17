@@ -30,7 +30,7 @@ services:
       - ./backend/services/api-server:/app # **สำคัญมาก:** ทำให้เมื่อเราแก้โค้ด .py บนเครื่องเรา มันจะอัปเดตใน container ทันที (Live Reload)
     env_file:
       - .env # บอกให้ service นี้อ่านค่าจากไฟล์ .env
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app # สั่งให้รัน FastAPI ในโหมด development
+    command: uvicorn src.api.api:app --reload --host 0.0.0.0 --port 8000 # สั่งให้รัน FastAPI ในโหมด development
 
 volumes:
   longsorn-db-data: # ประกาศ volume ที่จะใช้เก็บข้อมูล DB
