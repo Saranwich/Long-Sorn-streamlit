@@ -1,0 +1,142 @@
+# Pre-commit configuration for Supabase Auth API
+# See https://pre-commit.com for more information
+
+repos:
+  # General file cleanup and validation
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # File formatting and cleanup
+      - id: trailing-whitespace
+        exclude: ^src/tests/oauth/.*\.html$
+      - id: end-of-file-fixer
+        exclude: ^src/tests/oauth/.*\.html$
+      - id: check-merge-conflict
+      - id: check-case-conflict
+
+      # File validation
+      - id: check-yaml
+        args: ["--unsafe"]
+      - id: check-toml
+      - id: check-json
+      - id: check-xml
+
+      # Python-specific checks
+      - id: check-ast
+        files: \.py$
+      - id: debug-statements
+        files: \.py$
+      - id: check-docstring-first
+        files: \.py$
+
+      # General security and best practices
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+
+      # Requirements and dependencies
+      - id: requirements-txt-fixer
+        files: requirements.*\.txt$
+
+  # Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.15
+    hooks:
+      # Linting with auto-fix
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^src/.*\.py$
+
+      # Code formatting
+      - id: ruff-format
+        files: ^src/.*\.py$
+
+  # MyPy - Static type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.1
+    hooks:
+      - id: mypy
+        files: ^src/.*\.py$
+        args: [--config-file, pyproject.toml]
+        additional_dependencies:
+          - fastapi
+          - pydantic
+          - pydantic-settings
+          - google-cloud-secret-manager
+          - types-python-jose
+          - types-requests
+
+  # Prettier - Format JSON, YAML, Markdown
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        files: \.(json|yaml|yml|md)$
+        exclude: ^src/tests/oauth/.*\.html$
+
+  # Additional Python security checks
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        files: ^src/.*\.py$
+        args: [-r, -ll, --exclude, src/tests]
+
+  # Check for common Python mistakes
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-check-blanket-noqa
+        files: ^src/.*\.py$
+      - id: python-check-blanket-type-ignore
+        files: ^src/.*\.py$
+      - id: python-no-log-warn
+        files: ^src/.*\.py$
+      - id: python-use-type-annotations
+        files: ^src/.*\.py$
+
+  # 🏰 Dungeon Master - Complete context tracking workflow
+  - repo: local
+    hooks:
+      # Step 1: Create missing templates
+      - id: dungeon-master-update
+        name: "📜 DM: Create templates"
+        entry: dm
+        args: [update]
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # Step 2: Check significant changes
+      - id: dungeon-master-review
+        name: "🔮 DM: Review changes"
+        entry: dm
+        args: [review]
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # Step 3: Final validation
+      - id: dungeon-master-validate
+        name: "🛡️ DM: Validate docs"
+        entry: dm
+        args: [validate]
+        language: system
+        pass_filenames: false
+        always_run: true
+
+# Global configuration
+default_language_version:
+  python: python3
+
+exclude: |
+  (?x)^(
+    \.env.*|
+    \.venv/|
+    __pycache__/|
+    \.git/|
+    \.pytest_cache/|
+    \.mypy_cache/|
+    \.ruff_cache/|
+    src/tests/oauth/.*\.html
+  )$
