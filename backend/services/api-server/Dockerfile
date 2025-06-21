@@ -1,25 +1,18 @@
-# /backend/services/api-server/Dockerfile
-
-# Step 1: ใช้ Python 3.11-slim เป็น Image พื้นฐาน
+# ใช้ Python เวอร์ชั่น 3.11 แบบ slim เป็น Image พื้นฐาน
 FROM python:3.11-slim
 
-# Step 2: ตั้งค่า Working Directory ภายใน Container
+# กำหนด Working Directory ภายใน Container
 WORKDIR /app
 
-# Step 3: บอก Python ว่าให้มองหาโมดูลในโฟลเดอร์ /app ด้วย
-ENV PYTHONPATH=/app
+# Copy ไฟล์ที่ระบุรายการ Library ที่ต้องใช้เข้าไปก่อน
+# การ Copy แค่ไฟล์นี้ก่อนจะช่วยให้ Docker-cache ทำงานได้ดีขึ้นในอนาคต
+COPY requirements.txt .
 
-# Step 4: คัดลอกไฟล์ requirements.txt เข้าไปใน Container ก่อน
-# ที่ทำแบบนี้เพราะ Docker จะได้ไม่ต้องติดตั้ง library ใหม่ทุกครั้งที่เราแก้โค้ด (ถ้า library ไม่เปลี่ยน)
-COPY requirements.txt requirements.txt
-
-# Step 5: ติดตั้ง Library ทั้งหมดที่โปรเจกต์ต้องการ
+# รันคำสั่ง pip install เพื่อติดตั้ง Library ทั้งหมด
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Step 6: คัดลอกโค้ดทั้งหมดในโฟลเดอร์ app ของเราเข้าไปใน Container
-COPY ./app .
+# Copy โค้ดของแอปพลิเคชันทั้งหมด (ที่อยู่ในโฟลเดอร์ src) เข้าไปใน Container
+COPY ./src ./src
 
-# Step 7: บอก Docker ว่า Container นี้จะเปิด Port 8000 รอรับการเชื่อมต่อ
+# EXPOSE 8000 เป็นการประกาศให้ทราบว่า Container นี้จะทำงานที่ Port 8000
 EXPOSE 8000
-
-# หมายเหตุ: เราไม่ต้องใส่ CMD หรือ ENTRYPOINT ที่นี่เพราะเราได้สั่งให้รันด้วย uvicorn ในไฟล์ docker-compose.yml อยู่แล้ว
