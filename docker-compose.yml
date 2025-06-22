@@ -4,35 +4,35 @@ services:
 
   # Service ที่ 1: Database (PostgreSQL)
   db:
-    image: postgres:latest # ใช้ Image ของ PostgreSQL 
+    image: postgres:latest
     container_name: longsorn-db
     volumes:
-      - longsorn-db-data:/var/lib/postgresql/data # ทำให้ข้อมูลใน DB ไม่หายไปเมื่อ stop container
+      - longsorn-db-data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=${DB_USER} # ดึงค่าจากไฟล์ .env
+      - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
     ports:
-      - "5433:5432" # Map port 5432 ใน container ไปยัง port 5433 ที่เครื่องเราเพื่อป้องกันชนกับ PostgreSQL ที่อาจมีในเครื่อง
+      - "5433:5432"
     restart: unless-stopped
 
   # Service ที่ 2: Backend API (api_main)
-  api:
+  # แก้ไขโดยการลบ "services:" ที่ซ้อนออก และให้ api-server อยู่ระดับเดียวกับ db
+  api-server:
     container_name: longsorn-api
-    services:
-    api-server:
-      build:
-        context: ./backend  # Context ชี้ไปที่ backend
-        dockerfile: ./services/api-server/Dockerfile # ระบุตำแหน่ง Dockerfile
+    build:
+      context: ./backend
+      dockerfile: ./services/api-server/Dockerfile
     depends_on:
-      - db # บอกว่าให้เริ่ม service 'db' ก่อน แล้วค่อยเริ่ม 'api'
+      - db
     ports:
-      - "8000:8000" # Map port 8000 ของ FastAPI
+      - "8000:8000"
     volumes:
-      - ./backend/services/api-server:/app # **สำคัญมาก:** ทำให้เมื่อเราแก้โค้ด .py บนเครื่องเรา มันจะอัปเดตใน container ทันที (Live Reload)
+      - ./backend/services/api-server:/app
     env_file:
-      - .env # บอกให้ service นี้อ่านค่าจากไฟล์ .env
-    command: uvicorn src.api.api:app --reload --host 0.0.0.0 --port 8000 # สั่งให้รัน FastAPI ในโหมด development
+      - .env
+    # แก้ไข command ให้รันผ่าน python -m เพื่อความเสถียรของ Path
+    command: ["python", "-m", "uvicorn", "src.api.api:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
 
 volumes:
-  longsorn-db-data: # ประกาศ volume ที่จะใช้เก็บข้อมูล DB
+  longsorn-db-data:
