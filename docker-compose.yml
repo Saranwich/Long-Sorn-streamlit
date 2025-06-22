@@ -20,8 +20,8 @@ services:
   api:
     container_name: longsorn-api
     build:
-      context: ./backend/services/api-server # บอกว่าให้ไปหา Dockerfile ที่โฟลเดอร์นี้
-      dockerfile: Dockerfile
+      context: ./backend  # บอกให้มองจากโฟลเดอร์ backend
+      dockerfile: ./services/api-server/Dockerfile # ระบุตำแหน่ง Dockerfile
     depends_on:
       - db # บอกว่าให้เริ่ม service 'db' ก่อน แล้วค่อยเริ่ม 'api'
     ports:
