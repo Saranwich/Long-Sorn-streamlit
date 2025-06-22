@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 import uuid
 from sqlalchemy.orm import Session
-from ..services.queue_service import queue_service
 
 # --- ส่วน Imports ที่ต้องมีในโปรเจค ---
-from src.api.dependencies import get_current_user, get_current_active_user, get_db_session  # Import dependencies สำหรับการยืนยันตัวตนและ session
+from src.api.dependencies import get_current_user  # Dependency สำหรับ User
+from src.shared.db.database import get_db_session  # Dependency สำหรับ Database Session
 from src.services.r2_service import r2_service # Service R2
+from src.services.queue_service import queue_service
 # Models
 from src.models.auth import User
 from src.models.video import Video, VideoStatus
@@ -35,7 +36,7 @@ class VideoUploadResponse(BaseModel):
     description="Called by the client after a file is successfully uploaded to R2. This updates the video status and enqueues it for background processing."
 )
 
-def request_video_upload(request_data: VideoUploadRequest, db: Session = Depends(get_db_session), current_user: User = Depends(get_current_active_user)):
+def request_video_upload(request_data: VideoUploadRequest, db: Session = Depends(get_db_session), current_user: User = Depends(get_current_user)):
     """
     Endpoint สำหรับให้ User ที่ล็อกอินแล้วขอสิทธิ์ในการอัปโหลดวิดีโอ
     """
@@ -79,7 +80,7 @@ def request_video_upload(request_data: VideoUploadRequest, db: Session = Depends
 def confirm_upload_complete(
     video_id: uuid.UUID,
     db: Session = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     # ค้นหาวิดีโอใน DB และตรวจสอบความเป็นเจ้าของ
     video_record = db.query(Video).filter(Video.id == video_id, Video.user_id == current_user.id).first()
