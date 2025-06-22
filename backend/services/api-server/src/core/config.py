@@ -3,7 +3,7 @@
 import logging
 import os
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.core.constants import Defaults, EnvVars
 from src.core.secrets import load_secrets_from_gsm, should_use_gsm
@@ -40,10 +40,7 @@ class Settings(BaseSettings):
     REDIS_URL: str
     JOB_QUEUE_NAME: str = "video-processing-queue"
 
-    class Config:
-        env_file = ".env"
-
-    model_config = {"env_file": ".env", "case_sensitive": True}
+    model_config = SettingsConfigDict(env_file=".env")
 
 
 def get_settings() -> Settings:
