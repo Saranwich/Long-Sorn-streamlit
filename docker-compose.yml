@@ -24,13 +24,15 @@ services:
       dockerfile: ./services/api-server/Dockerfile
     depends_on:
       - db
+    environment:
+      - PYTHONPATH=/app
     ports:
       - "8000:8000"
     env_file:
-      - .env
-    volumes:
-      - ./backend/services/api-server:/app
-      - ./backend/shared:/app/src/shared
+      - ./backend/services/api-server/.env
+    # volumes:
+    #   - ./backend/services/api-server:/app
+    #   - ./backend/shared:/app/src/shared
       
     # ใช้ command ที่เสถียรที่สุด
     command: ["python", "-m", "uvicorn", "src.api.api:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
