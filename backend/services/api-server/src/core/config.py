@@ -4,7 +4,6 @@ import logging
 import os
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 from src.core.constants import Defaults, EnvVars
 from src.core.secrets import load_secrets_from_gsm, should_use_gsm
 
@@ -26,9 +25,9 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = Defaults.CORS_ORIGINS
 
     # Supabase - make these optional with defaults
-    SUPABASE_URL: str = ""
-    SUPABASE_KEY: str = ""
-    SUPABASE_JWT_SECRET: str = ""
+    SUPABASE_URL: str
+    SUPABASE_KEY: str
+    SUPABASE_JWT_SECRET: str
 
     # Application settings
     DEBUG: bool = Defaults.DEBUG
@@ -38,7 +37,14 @@ class Settings(BaseSettings):
 
     # Redis for Job Queue
     REDIS_URL: str
-    JOB_QUEUE_NAME: str = "video-processing-queue"
+    JOB_QUEUE_NAME: str = "long-sorn"
+
+    # Database & R2 Storage
+    DATABASE_URL: str
+    R2_ENDPOINT_URL: str 
+    R2_ACCESS_KEY_ID: str
+    R2_SECRET_ACCESS_KEY: str 
+    R2_BUCKET_NAME: str 
 
     model_config = SettingsConfigDict(env_file=".env")
 
