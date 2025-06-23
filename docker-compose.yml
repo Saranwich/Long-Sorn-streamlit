@@ -16,8 +16,7 @@ services:
       - "5433:5432"
     restart: unless-stopped
 
-  # Service ที่ 2: Backend API (api_main)
-  # แก้ไขโดยการลบ "services:" ที่ซ้อนออก และให้ api-server อยู่ระดับเดียวกับ db
+  # Service ที่ 2: Backend API
   api-server:
     container_name: longsorn-api
     build:
@@ -27,11 +26,13 @@ services:
       - db
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend/services/api-server:/app
     env_file:
       - .env
-    # แก้ไข command ให้รันผ่าน python -m เพื่อความเสถียรของ Path
+    volumes:
+      - ./backend/services/api-server:/app
+      - ./backend/shared:/app/src/shared
+      
+    # ใช้ command ที่เสถียรที่สุด
     command: ["python", "-m", "uvicorn", "src.api.api:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
 
 volumes:
