@@ -64,8 +64,8 @@ class UserResponse(UserBase):
     created_at: datetime | None = None
 
     class Config:
-        orm_mode = True
-
+        # orm_mode = True
+        from_attributes = True # Pydantic V2
 
 class TokenResponse(BaseModel):
     """Token response schema"""
