@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     TESTING: bool = False
     LOG_LEVEL: str = "INFO"
+
+    # CORS settings - จำเป็นสำหรับการตั้งค่า FastAPI Middleware
+    CORS_ORIGINS: list[str] = ["*"] # อนุญาตทุก Origin ไปก่อนเพื่อการพัฒนา
     
     # Supabase API (for Auth)
     SUPABASE_URL: str
