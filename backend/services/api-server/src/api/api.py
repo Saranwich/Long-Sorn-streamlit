@@ -12,9 +12,9 @@ from src.core.config import settings
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(
-    title="Supabase Auth API",
-    description="Production-ready authentication API with Supabase",
-    version="0.1.0",
+    title="Long Sorn API",
+    description="API for LongSorn, empowering teaching competency for everyone.",
+    version="1.0.0",
 )
 
 # CORS middleware
