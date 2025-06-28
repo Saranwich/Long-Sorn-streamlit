@@ -1,19 +1,28 @@
-# ใช้ Python เวอร์ชั่น 3.11 แบบ slim เป็น Image พื้นฐาน
-FROM python:3.11-slim
+# Stage 1: Build the application
+FROM python:3.11-slim as builder
 
-# กำหนด Working Directory ภายใน Container
+# กำหนด Working Directory
 WORKDIR /app
 
-# Copy ไฟล์ที่ระบุรายการ Library ที่ต้องใช้เข้าไปก่อน
-# การ Copy แค่ไฟล์นี้ก่อนจะช่วยให้ Docker-cache ทำงานได้ดีขึ้นในอนาคต
-COPY ./services/api-server/requirements.txt .
+# (สำคัญ) ตั้งค่า PYTHONPATH ภายใน Image โดยตรง
+# เพื่อให้ Python หาโมดูลใน /app เจอเสมอ
+ENV PYTHONPATH=/app
 
-# รันคำสั่ง pip install เพื่อติดตั้ง Library ทั้งหมด
-RUN pip install --no-cache-dir -r requirements.txt
+# คัดลอกเฉพาะไฟล์ requirements.txt เข้ามาก่อนเพื่อใช้ Docker cache
+COPY ./services/api-server/requirements.txt /app/requirements.txt
 
-# Copy โค้ดของแอปพลิเคชันทั้งหมด (ที่อยู่ในโฟลเดอร์ src) เข้าไปใน Container
-COPY ./services/api-server/ /app
-COPY ./shared/ /app/src/shared/
+# ติดตั้ง dependencies ทั้งหมด
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# EXPOSE 8000 เป็นการประกาศให้ทราบว่า Container นี้จะทำงานที่ Port 8000
+# คัดลอกโค้ดของ api-server (เฉพาะโฟลเดอร์ src) เข้าไป
+COPY ./services/api-server/src /app/src
+
+# คัดลอกโค้ดของ shared เข้าไปใน src/shared
+COPY ./shared /app/src/shared
+
+
+# Stage 2: Final image (ถ้าต้องการ image ที่เล็กลง)
+# ในตอนนี้เราใช้แค่ Stage เดียวเพื่อความง่ายในการดีบัก
+
+# EXPOSE Port
 EXPOSE 8000
