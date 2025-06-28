@@ -29,10 +29,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str
 
     # Cloudflare R2 (for Object Storage)
-    R2_ENDPOINT_URL: str
-    R2_ACCESS_KEY_ID: str
-    R2_SECRET_ACCESS_KEY: str
-    R2_BUCKET_NAME: str
+    CLOUDFLARE_R2_ENDPOINT_URL: str
+    CLOUDFLARE_R2_ACCESS_KEY_ID: str
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: str
+    CLOUDFLARE_R2_BUCKET_NAME: str
 
     model_config = SettingsConfigDict(
         env_file=".env",
