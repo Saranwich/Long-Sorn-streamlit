@@ -36,13 +36,13 @@ class VideoUploadResponse(BaseModel):
     description="Called by the client after a file is successfully uploaded to R2. This updates the video status and enqueues it for background processing."
 )
 
-def request_video_upload(request_data: VideoUploadRequest, db: Session = Depends(get_db_session), current_user: User = Depends(get_current_user)):
+def request_video_upload(request_data: VideoUploadRequest, db: Session = Depends(get_db_session), current_user: str = Depends(get_current_user)):
     """
     Endpoint สำหรับให้ User ที่ล็อกอินแล้วขอสิทธิ์ในการอัปโหลดวิดีโอ
     """
     # สร้าง Key ที่จะไม่ซ้ำกันสำหรับเก็บไฟล์ใน R2
     video_id = uuid.uuid4()
-    object_key = f"users/{current_user.id}/videos/{video_id}/{request_data.filename}"
+    object_key = f"users/{current_user}/videos/{video_id}/{request_data.filename}"
     # เรียกใช้ Service เพื่อสร้าง Signed URL
     upload_url = r2_service.generate_presigned_upload_url(object_key)
 
@@ -80,7 +80,7 @@ def request_video_upload(request_data: VideoUploadRequest, db: Session = Depends
 def confirm_upload_complete(
     video_id: uuid.UUID,
     db: Session = Depends(get_db_session),
-    current_user: User = Depends(get_current_user)
+    current_user: str = Depends(get_current_user)
 ):
     # ค้นหาวิดีโอใน DB และตรวจสอบความเป็นเจ้าของ
     video_record = db.query(Video).filter(Video.id == video_id, Video.user_id == current_user.id).first()
