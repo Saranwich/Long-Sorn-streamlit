@@ -2,65 +2,48 @@
 
 import logging
 import os
-
-from pydantic_settings import BaseSettings
-
-from src.core.constants import Defaults, EnvVars
-from src.core.secrets import load_secrets_from_gsm, should_use_gsm
+from functools import lru_cache
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
-
 class Settings(BaseSettings):
     """Application settings"""
+    # Base App Config
+    APP_NAME: str = "LongSorn API"
+    API_V1_STR: str = "/api/v1"
+    DEBUG: bool = False
+    TESTING: bool = False
+    LOG_LEVEL: str = "INFO"
 
-    # Base
-    APP_NAME: str = Defaults.APP_NAME
-    API_V1_STR: str = Defaults.API_V1_STR
+    # CORS settings - จำเป็นสำหรับการตั้งค่า FastAPI Middleware
+    CORS_ORIGINS: list[str] = ["*"] # อนุญาตทุก Origin ไปก่อนเพื่อการพัฒนา
+    
+    # Supabase API (for Auth)
+    SUPABASE_URL: str
+    SUPABASE_KEY: str
+    SUPABASE_JWT_SECRET: str
 
-    # App metadata
-    APP_VERSION: str = Defaults.APP_VERSION
-    APP_DESCRIPTION: str = Defaults.APP_DESCRIPTION
-
-    # CORS settings
-    CORS_ORIGINS: list[str] = Defaults.CORS_ORIGINS
-
-    # Supabase - make these optional with defaults
-    SUPABASE_URL: str = ""
-    SUPABASE_KEY: str = ""
-    SUPABASE_JWT_SECRET: str = ""
-
-    # Application settings
-    DEBUG: bool = Defaults.DEBUG
-    TESTING: bool = Defaults.TESTING
-    LOG_LEVEL: str = Defaults.LOG_LEVEL
-    USE_GSM: bool = Defaults.USE_GSM
-
-    # Redis for Job Queue
+    # Redis (for Job Queue)
     REDIS_URL: str
-    JOB_QUEUE_NAME: str = "video-processing-queue"
+    JOB_QUEUE_NAME: str = "long-sorn"
 
-    class Config:
-        env_file = ".env"
+    # Direct Database Connection (for SQLAlchemy)
+    DATABASE_URL: str
 
-    model_config = {"env_file": ".env", "case_sensitive": True}
+    # Cloudflare R2 (for Object Storage)
+    CLOUDFLARE_R2_ENDPOINT_URL: str
+    CLOUDFLARE_R2_ACCESS_KEY_ID: str
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: str
+    CLOUDFLARE_R2_BUCKET_NAME: str
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding='utf-8'
+    )
 
-def get_settings() -> Settings:
-    """Get application settings with optional Google Secret Manager integration"""
-    # Load secrets from GSM if enabled (automatically falls back to env variables)
-    if should_use_gsm():
-        load_secrets_from_gsm()
-
+@lru_cache()
+def get_settings():
     return Settings()
 
-
-def should_use_testing() -> bool:
-    return os.environ.get(EnvVars.TESTING, "").lower() in ("true", "1", "t")
-
-
-# Load settings using the function
 settings = get_settings()
-
-# Set log level
-LOG_LEVEL = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)

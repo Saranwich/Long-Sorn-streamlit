@@ -1,0 +1,5 @@
+redis==6.2.0
+boto3==1.38.38
+python-dotenv==1.1.0
+SQLAlchemy==2.0.41
+psycopg2-binary==2.9.10

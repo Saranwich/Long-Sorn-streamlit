@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 import uuid
 from sqlalchemy.orm import Session
-from ..services.queue_service import queue_service
 
 # --- ส่วน Imports ที่ต้องมีในโปรเจค ---
-from src.api.dependencies import get_current_user, get_current_active_user, get_db_session  # Import dependencies สำหรับการยืนยันตัวตนและ session
+from src.api.dependencies import get_current_user  # Dependency สำหรับ User
+from src.shared.db.database import get_db_session  # Dependency สำหรับ Database Session
 from src.services.r2_service import r2_service # Service R2
+from src.services.queue_service import queue_service
 # Models
 from src.models.auth import User
 from src.models.video import Video, VideoStatus
@@ -35,13 +36,13 @@ class VideoUploadResponse(BaseModel):
     description="Called by the client after a file is successfully uploaded to R2. This updates the video status and enqueues it for background processing."
 )
 
-def request_video_upload(request_data: VideoUploadRequest, db: Session = Depends(get_db_session), current_user: User = Depends(get_current_active_user)):
+def request_video_upload(request_data: VideoUploadRequest, db: Session = Depends(get_db_session), current_user_id: str = Depends(get_current_user)):
     """
     Endpoint สำหรับให้ User ที่ล็อกอินแล้วขอสิทธิ์ในการอัปโหลดวิดีโอ
     """
     # สร้าง Key ที่จะไม่ซ้ำกันสำหรับเก็บไฟล์ใน R2
     video_id = uuid.uuid4()
-    object_key = f"users/{current_user.id}/videos/{video_id}/{request_data.filename}"
+    object_key = f"users/{current_user_id}/videos/{video_id}/{request_data.filename}"
     # เรียกใช้ Service เพื่อสร้าง Signed URL
     upload_url = r2_service.generate_presigned_upload_url(object_key)
 
@@ -54,7 +55,7 @@ def request_video_upload(request_data: VideoUploadRequest, db: Session = Depends
     try:
         new_video_record = Video(
             id=video_id,
-            user_id=current_user.id,
+            user_id=current_user_id,
             original_filename=request_data.filename,
             r2_object_key=object_key,
             status=VideoStatus.UPLOADING, # กำหนดสถานะเริ่มต้น
@@ -79,10 +80,10 @@ def request_video_upload(request_data: VideoUploadRequest, db: Session = Depends
 def confirm_upload_complete(
     video_id: uuid.UUID,
     db: Session = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user_id: str = Depends(get_current_user)
 ):
     # ค้นหาวิดีโอใน DB และตรวจสอบความเป็นเจ้าของ
-    video_record = db.query(Video).filter(Video.id == video_id, Video.user_id == current_user.id).first()
+    video_record = db.query(Video).filter(Video.id == video_id, Video.user_id == current_user_id).first()
 
     if not video_record:
         raise HTTPException(

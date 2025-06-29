@@ -26,7 +26,7 @@ Session_Local = sessionmaker(autocommit = False, autoflush = False, bind = engin
 Base = declarative_base()
 
 # --- ฟังก์ชันสำหรับ Dependency Injection ใน FastAPI ---
-def get_db():
+def get_db_session():
     """
     ฟังก์ชันนี้จะถูกเรียกใช้ในทุกๆ API Endpoint ที่ต้องการคุยกับ Database
     มันจะทำการเปิด session, ให้ API นำไปใช้งาน, และปิด session อัตโนมัติเมื่อ API ทำงานเสร็จ
