@@ -1,3 +1,5 @@
+# C:\Users\GitHub\Long-Sorn\backend\services\video_worker\main.py
+# การส่งต่องานจาก Video Worker ไปยัง AI Orchestrator สร้างทางเชื่อมระหว่างการประมวลผลวิดีโอเบื้องต้นกับการวิเคราะห์ด้วย AI
 import redis
 import boto3
 import json
@@ -7,6 +9,7 @@ import time
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from queue_service import queue_service
 
 # --- โหลดการตั้งค่าจาก .env ---
 load_dotenv()
@@ -68,7 +71,7 @@ def process_video_job(job_data: dict):
             check=True, capture_output=True
         )
         print("Audio extraction complete.")
-    # --- อัปโหลดไฟล์เสียงกลับไปที่ R2 ---
+        # --- อัปโหลดไฟล์เสียงกลับไปที่ R2 ---
         print(f"Uploading audio to R2 at {audio_object_key}...")
         s3_client.upload_file(local_audio_path, R2_BUCKET_NAME, audio_object_key)
         print("Audio upload complete.")
@@ -82,11 +85,32 @@ def process_video_job(job_data: dict):
         db.commit()
         print("Database updated.")
 
+        print("Enqueuing job for AI analysis...")
+        ai_queue_name = "ai-analysis-queue" # คิวใหม่สำหรับ AI
+
+        success = queue_service.enqueue_job(
+            queue_name=ai_queue_name,
+            job_data={
+                "video_id": video_id,
+                "audio_r2_key": audio_object_key # ส่ง Path ของไฟล์เสียงไปให้ AI Worker
+            }
+        )
+        if success:
+            print(f"Successfully enqueued AI job for video_id: {video_id}")
+            # อัปเดตสถานะใน DB เป็น PENDING_AI_ANALYSIS
+            update_query = text("UPDATE videos SET status = 'PENDING_AI_ANALYSIS', audio_r2_key = :audio_key WHERE id = :vid")
+            db.execute(update_query, {"audio_key": audio_object_key, "vid": video_id})
+            db.commit()
+            print("Database status updated to PENDING_AI_ANALYSIS.")
+        else:
+            raise Exception("Failed to enqueue AI job.")
+
     except Exception as e:
         print(f"!!! AN ERROR OCCURRED for video_id {video_id}: {e}")
         error_query = text("UPDATE videos SET status = 'FAILED' WHERE id = :vid")
         db.execute(error_query, {"vid": video_id})
         db.commit()
+        pass
     finally:
         # ลบไฟล์ชั่วคราว
         if os.path.exists(temp_dir):
@@ -94,4 +118,5 @@ def process_video_job(job_data: dict):
             shutil.rmtree(temp_dir)
         db.close()
         print(f"Finished job for video_id: {video_id}\n")
+        pass
     
