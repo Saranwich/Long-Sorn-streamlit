@@ -1,7 +1,5 @@
 # /docker-compose.yml
 
-version: '3.8'
-
 services:
   # Service ที่ 1: Database (PostgreSQL) - สำหรับการพัฒนาในเครื่อง (Local Development)
   # หมายเหตุ: จาก Log ปัจจุบัน api-server และ video_worker เชื่อมต่อกับ Supabase DB โดยตรง
