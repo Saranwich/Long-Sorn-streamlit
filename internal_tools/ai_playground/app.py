@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from google.cloud import speech
 import time
 import pandas as pd
+import subprocess # สำหรับเรียกใช้ FFmpeg
+import tempfile # สำหรับสร้างไฟล์ชั่วคราว
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -15,7 +17,51 @@ st.set_page_config(
 # --- Load Environment Variables ---
 load_dotenv()
 
-# --- Backend Functions AI Calls ---
+# --- Backend Functions (AI Calls) ---
+
+def convert_audio_with_ffmpeg(input_bytes):
+    """
+    ใช้ FFmpeg เพื่อแปลงไฟล์เสียงที่รับเข้ามาให้เป็นรูปแบบที่ STT ต้องการ
+    (WAV, 16-bit PCM, 16000 Hz, Mono)
+    """
+    try:
+        # สร้างไฟล์ชั่วคราวสำหรับ Input และ Output
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".tmp") as temp_in:
+            temp_in.write(input_bytes)
+            input_filename = temp_in.name
+        
+        output_filename = input_filename + ".wav"
+
+        # รันคำสั่ง FFmpeg
+        command = [
+            "ffmpeg",
+            "-i", input_filename,      # Input file
+            "-acodec", "pcm_s16le",    # Audio codec: 16-bit signed little-endian PCM
+            "-ar", "16000",            # Audio sample rate: 16000 Hz
+            "-ac", "1",                # Audio channels: 1 (Mono)
+            "-y",                      # Overwrite output file if it exists
+            output_filename
+        ]
+        
+        process = subprocess.run(command, check=True, capture_output=True, text=True)
+        
+        # อ่านข้อมูลจากไฟล์ Output ที่แปลงแล้ว
+        with open(output_filename, "rb") as f:
+            output_bytes = f.read()
+            
+        # ลบไฟล์ชั่วคราว
+        os.remove(input_filename)
+        os.remove(output_filename)
+        
+        return output_bytes, None
+    except subprocess.CalledProcessError as e:
+        # กรณี FFmpeg ทำงานผิดพลาด
+        error_message = f"FFmpeg error: {e.stderr}"
+        st.error(error_message)
+        return None, error_message
+    except Exception as e:
+        return None, str(e)
+
 
 @st.cache_data
 def run_stt_transcription(audio_file_content):
@@ -26,10 +72,10 @@ def run_stt_transcription(audio_file_content):
         client = speech.SpeechClient()
         audio = speech.RecognitionAudio(content=audio_file_content)
         
-        # --- ส่วนที่แก้ไข ---
-        # เราจะสร้าง config แบบ "โล่งๆ" เพื่อให้ API ตรวจจับ encoding และ sample rate โดยอัตโนมัติ
-        # ซึ่งเป็นวิธีที่ยืดหยุ่นกว่าสำหรับไฟล์หลายประเภท
+        # ตอนนี้รับประกันได้ว่าไฟล์เป็น WAV 16kHz แล้ว จึงสามารถระบุ config ได้
         config = speech.RecognitionConfig(
+            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=16000,
             language_code="th-TH",
             enable_automatic_punctuation=True,
             enable_word_time_offsets=True,
@@ -38,7 +84,6 @@ def run_stt_transcription(audio_file_content):
         response = client.recognize(config=config, audio=audio)
         return response, None
     except Exception as e:
-        # เพิ่มการแสดงผล error ที่ละเอียดขึ้น
         st.error(f"Google STT API Error: {e}")
         return None, str(e)
 
@@ -65,6 +110,7 @@ def run_mock_nlp_analysis(transcript: str):
     }
 
 # --- Main UI ---
+
 st.title("🤖 LongSorn AI Playground")
 st.caption("เครื่องมือสาธิตการทำงานของ AI Pipeline ที่มี UI ใกล้เคียงกับผลิตภัณฑ์จริง")
 st.divider()
@@ -99,10 +145,20 @@ if uploaded_file is not None:
 # --- Processing ---
 if 'analysis_triggered' in st.session_state and st.session_state.analysis_triggered:
     with st.status("AI is analyzing your content...", expanded=True) as status:
-        status.update(label="กำลังประมวลผลเสียง (Speech-to-Text)...")
-        stt_response, error = run_stt_transcription(st.session_state.uploaded_file_content)
         
-        if error:
+        status.update(label="กำลังแปลงไฟล์เสียงให้อยู่ในรูปแบบมาตรฐาน...")
+        # --- แปลงไฟล์ด้วย FFmpeg ก่อน ---
+        converted_audio_content, ffmpeg_error = convert_audio_with_ffmpeg(st.session_state.uploaded_file_content)
+        
+        if ffmpeg_error:
+            status.update(label="เกิดข้อผิดพลาดในการแปลงไฟล์!", state="error", expanded=True)
+            st.stop()
+        
+        status.update(label="กำลังประมวลผลเสียง (Speech-to-Text)...")
+        # --- เรียกใช้ STT ด้วยไฟล์ที่แปลงแล้ว ---
+        stt_response, stt_error = run_stt_transcription(converted_audio_content)
+        
+        if stt_error:
             status.update(label="เกิดข้อผิดพลาด!", state="error", expanded=True)
             st.stop()
         
