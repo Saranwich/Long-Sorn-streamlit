@@ -22,12 +22,23 @@ R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY")
 R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME")
 
+# --- 1. โหลดการตั้งค่าจาก .env ---
+print("--- Loading environment variables... ---")
+load_dotenv()
 # Redis Credentials (ใช้ตัวแปรแยกเพื่อความชัดเจน)
 REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = os.getenv("REDIS_PORT")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 JOB_QUEUE_NAME = os.getenv("JOB_QUEUE_NAME", "video_processing_queue")
 AI_QUEUE_NAME = "ai-analysis-queue"
+# --- ส่วนที่เพิ่มเข้ามาเพื่อ Debug ---
+print(f"DEBUG: Attempting to connect to Redis with the following credentials:")
+print(f"DEBUG:   - HOST: {REDIS_HOST}")
+print(f"DEBUG:   - PORT: {REDIS_PORT}")
+print(f"DEBUG:   - PASSWORD: {'*' * len(REDIS_PASSWORD) if REDIS_PASSWORD else 'None'}")
+print(f"DEBUG:   - QUEUE: {JOB_QUEUE_NAME}")
+print("-----------------------------------------")
+# ------------------------------------
 
 # Database Credentials
 DATABASE_URL = os.getenv("DATABASE_URL")
