@@ -1,0 +1,9 @@
+# Core library for the web app
+streamlit
+
+# Google Cloud libraries for AI services
+google-cloud-speech
+google-generativeai
+
+# Utility for handling environment variables (API keys)
+python-dotenv
