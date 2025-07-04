@@ -1,20 +1,17 @@
 import streamlit as st
 import os
+import json
+import requests
 from dotenv import load_dotenv
 from google.cloud import speech
+import google.generativeai as genai
 import time
 import pandas as pd
-import subprocess # สำหรับเรียกใช้ FFmpeg
-import tempfile # สำหรับสร้างไฟล์ชั่วคราว
+import subprocess
+import tempfile
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="LongSorn AI Playground",
-    page_icon="🤖",
-    layout="wide"
-)
-
-# --- Load Environment Variables ---
+# --- Page Configuration & ENV Loading ---
+st.set_page_config(page_title="LongSorn AI", page_icon="🤖", layout="wide")
 load_dotenv()
 
 # --- Backend Functions (AI Calls) ---
@@ -22,46 +19,28 @@ load_dotenv()
 def convert_audio_with_ffmpeg(input_bytes):
     """
     ใช้ FFmpeg เพื่อแปลงไฟล์เสียงที่รับเข้ามาให้เป็นรูปแบบที่ STT ต้องการ
-    (WAV, 16-bit PCM, 16000 Hz, Mono)
     """
     try:
-        # สร้างไฟล์ชั่วคราวสำหรับ Input และ Output
         with tempfile.NamedTemporaryFile(delete=False, suffix=".tmp") as temp_in:
             temp_in.write(input_bytes)
             input_filename = temp_in.name
         
         output_filename = input_filename + ".wav"
-
-        # รันคำสั่ง FFmpeg
         command = [
-            "ffmpeg",
-            "-i", input_filename,      # Input file
-            "-acodec", "pcm_s16le",    # Audio codec: 16-bit signed little-endian PCM
-            "-ar", "16000",            # Audio sample rate: 16000 Hz
-            "-ac", "1",                # Audio channels: 1 (Mono)
-            "-y",                      # Overwrite output file if it exists
-            output_filename
+            "ffmpeg", "-i", input_filename, "-acodec", "pcm_s16le",
+            "-ar", "16000", "-ac", "1", "-y", output_filename
         ]
+        subprocess.run(command, check=True, capture_output=True, text=True)
         
-        process = subprocess.run(command, check=True, capture_output=True, text=True)
-        
-        # อ่านข้อมูลจากไฟล์ Output ที่แปลงแล้ว
         with open(output_filename, "rb") as f:
             output_bytes = f.read()
             
-        # ลบไฟล์ชั่วคราว
         os.remove(input_filename)
         os.remove(output_filename)
-        
         return output_bytes, None
-    except subprocess.CalledProcessError as e:
-        # กรณี FFmpeg ทำงานผิดพลาด
-        error_message = f"FFmpeg error: {e.stderr}"
-        st.error(error_message)
-        return None, error_message
     except Exception as e:
+        st.error(f"FFmpeg Error: {e}")
         return None, str(e)
-
 
 @st.cache_data
 def run_stt_transcription(audio_file_content):
@@ -71,8 +50,6 @@ def run_stt_transcription(audio_file_content):
     try:
         client = speech.SpeechClient()
         audio = speech.RecognitionAudio(content=audio_file_content)
-        
-        # ตอนนี้รับประกันได้ว่าไฟล์เป็น WAV 16kHz แล้ว จึงสามารถระบุ config ได้
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=16000,
@@ -80,74 +57,94 @@ def run_stt_transcription(audio_file_content):
             enable_automatic_punctuation=True,
             enable_word_time_offsets=True,
         )
-        
         response = client.recognize(config=config, audio=audio)
         return response, None
     except Exception as e:
         st.error(f"Google STT API Error: {e}")
         return None, str(e)
 
-def run_mock_nlp_analysis(transcript: str):
+def run_real_nlp_analysis(transcript: str):
     """
-    ฟังก์ชันจำลองการทำงานของ NLP (Gemini/Typhoon)
+    ฟังก์ชันสำหรับเรียกใช้ Gemini และ Typhoon API เพื่อวิเคราะห์ Transcript จริง
     """
-    time.sleep(1) # ลดเวลาจำลอง
-    filler_word_count = transcript.lower().count("เอ่อ") + transcript.lower().count("แบบว่า") + transcript.lower().count("อืม")
+    # ---- 1. Gemini Analysis for General Feedback ----
+    gemini_feedback = "Not available"
+    try:
+        genai.configure(api_key=os.getenv("GOOGLE_GEMINI_API_KEY"))
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        prompt = f"""
+        Analyze the following teaching transcript:
+        "{transcript}"
+        
+        Provide an evaluation on two metrics:
+        1. Speaking Pace: Is the pace Good, Too fast, or Too slow?
+        2. Clarity Score: Rate the clarity of communication on a scale from 1 to 10.
+
+        Please respond only in this exact format:
+        Pace: [Your Result]
+        Clarity: [Your Score]
+        """
+        response = model.generate_content(prompt)
+        gemini_feedback = response.text
+    except Exception as e:
+        st.warning(f"Could not connect to Gemini API: {e}")
+
+    # ---- 2. Typhoon API Analysis for Thai-specific Filler Words ----
+    filler_word_count = 0
+    try:
+        api_url = os.getenv("TYPHOON_API_URL")
+        api_key = os.getenv("TYPHOON_API_KEY")
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "typhoon-v2.1-12b-instruct", # ชื่อโมเดลตามที่ผู้ให้บริการกำหนด
+            "prompt": f"จากข้อความต่อไปนี้: \"{transcript}\" ช่วยนับจำนวนคำฟุ่มเฟือยของภาษาไทย (เช่น เอ่อ, อ่า, แบบว่า, คือว่า, นะครับ) ว่ามีทั้งหมดกี่คำ ตอบเป็นตัวเลขเท่านั้น",
+            "max_tokens": 10
+        }
+        
+        response = requests.post(api_url, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+        response_json = response.json()
+        
+        # การดึงผลลัพธ์อาจจะต้องปรับตาม Response จริงของผู้ให้บริการ
+        # สมมติว่าผลลัพธ์อยู่ใน response_json['choices'][0]['text']
+        raw_response = response_json.get("choices", [{}])[0].get("text", "0")
+        filler_word_count = int("".join(filter(str.isdigit, raw_response)))
+
+    except Exception as e:
+        st.warning(f"Could not connect to Typhoon API: {e}")
+
+    # ---- Combine Results ---
+    pace = "N/A"
+    clarity = 0.0
+    for line in gemini_feedback.splitlines():
+        if "Pace:" in line:
+            pace = line.split("Pace:")[1].strip()
+        if "Clarity:" in line:
+            try:
+                clarity = float(line.split("Clarity:")[1].strip())
+            except:
+                clarity = 0.0
+
     return {
         "speech_analysis": {
             "Filler Words Detected": filler_word_count,
-            "Speaking Pace": "Good",
-            "Clarity Score": 8.2
+            "Speaking Pace": pace,
+            "Clarity Score": clarity
         },
-        "timeline_feedback": [
-            {"timestamp": "0:01", "type": "Filler Word", "suggestion": "พบคำว่า 'เอ่อ' ลองเว้นจังหวะแทน"},
-            {"timestamp": "0:06", "type": "Filler Word", "suggestion": "พบคำว่า 'แบบว่า' ซึ่งเป็นคำฟุ่มเฟือย"},
-        ],
-        "ai_recommendations": [
-            {"original": "เอ่อ... วันนี้เราก็จะมาเรียนเรื่องการ...", "suggestion": "วันนี้เราจะมาเรียนเรื่อง..."},
-            {"original": "ซึ่งแบบว่ามันเป็นเรื่องที่สำคัญมาก", "suggestion": "ซึ่งเป็นเรื่องที่สำคัญมาก"}
-        ]
+        "timeline_feedback": [{"timestamp": "N/A", "type": "Mock", "suggestion": "Real timeline feedback requires further logic."}],
+        "ai_recommendations": [{"original": "N/A", "suggestion": "Mock recommendation."}]
     }
 
-# --- Main UI ---
-
-st.title("🤖 LongSorn AI Playground")
-st.caption("เครื่องมือสาธิตการทำงานของ AI Pipeline ที่มี UI ใกล้เคียงกับผลิตภัณฑ์จริง")
-st.divider()
-
-# --- Upload ---
-st.header("Upload Your Content")
-uploaded_file = st.file_uploader(
-    "อัปโหลดไฟล์วิดีโอหรือไฟล์เสียง (จำกัด 1 ไฟล์, สูงสุด 100MB)",
-    type=["mp4", "mov", "mp3", "wav", "m4a", "flac"],
-    label_visibility="collapsed"
-)
-
-if uploaded_file is not None:
-    file_size_mb = uploaded_file.size / (1024 * 1024)
-    if file_size_mb > 100:
-        st.error("ไฟล์มีขนาดใหญ่เกิน 100MB กรุณาเลือกไฟล์ใหม่")
-    else:
-        st.info(f"Selected File: **{uploaded_file.name}** ({file_size_mb:.2f} MB)")
-        st.audio(uploaded_file)
-        
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("Upload & Analyze", type="primary", use_container_width=True):
-                st.session_state.clear()
-                st.session_state.analysis_triggered = True
-                st.session_state.uploaded_file_content = uploaded_file.getvalue()
-        with col2:
-            if st.button("Clear", use_container_width=True):
-                st.session_state.clear()
-                st.rerun()
-
-# --- Processing ---
+# --- Main UI and Processing Logic ---
+st.title("🤖 LongSorn AI")
 if 'analysis_triggered' in st.session_state and st.session_state.analysis_triggered:
     with st.status("AI is analyzing your content...", expanded=True) as status:
-        
         status.update(label="กำลังแปลงไฟล์เสียงให้อยู่ในรูปแบบมาตรฐาน...")
-        # --- แปลงไฟล์ด้วย FFmpeg ก่อน ---
         converted_audio_content, ffmpeg_error = convert_audio_with_ffmpeg(st.session_state.uploaded_file_content)
         
         if ffmpeg_error:
@@ -155,7 +152,6 @@ if 'analysis_triggered' in st.session_state and st.session_state.analysis_trigge
             st.stop()
         
         status.update(label="กำลังประมวลผลเสียง (Speech-to-Text)...")
-        # --- เรียกใช้ STT ด้วยไฟล์ที่แปลงแล้ว ---
         stt_response, stt_error = run_stt_transcription(converted_audio_content)
         
         if stt_error:
@@ -169,7 +165,7 @@ if 'analysis_triggered' in st.session_state and st.session_state.analysis_trigge
             [result.alternatives[0].transcript for result in stt_response.results if result.alternatives]
         ) if stt_response and stt_response.results else ""
 
-        nlp_results = run_mock_nlp_analysis(full_transcript)
+        nlp_results = run_real_nlp_analysis(full_transcript)
         st.session_state.nlp_results = nlp_results
         
         status.update(label="การวิเคราะห์เสร็จสิ้น!", state="complete", expanded=False)
@@ -177,7 +173,6 @@ if 'analysis_triggered' in st.session_state and st.session_state.analysis_trigge
     st.session_state.analysis_triggered = False
     st.session_state.results_ready = True
 
-# --- Results ---
 if 'results_ready' in st.session_state and st.session_state.results_ready:
     st.divider()
     st.header("AI Analysis Results")
@@ -191,12 +186,7 @@ if 'results_ready' in st.session_state and st.session_state.results_ready:
         st.subheader("Timeline Feedback")
         for feedback in nlp_res["timeline_feedback"]:
             with st.container(border=True):
-                r1_col1, r1_col2 = st.columns([1, 4])
-                with r1_col1:
-                    st.write(f"**{feedback['timestamp']}**")
-                with r1_col2:
-                    st.write(f"**{feedback['type']}**")
-                st.info(f"**Suggestion:** {feedback['suggestion']}")
+                st.write(f"**Suggestion:** {feedback['suggestion']}")
     
     with right_col:
         st.subheader("Speech Analysis")
