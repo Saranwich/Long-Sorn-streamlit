@@ -1,5 +1,6 @@
 # Core library for the web app
 streamlit
+pandas
 
 # Google Cloud libraries for AI services
 google-cloud-speech
@@ -7,3 +8,6 @@ google-generativeai
 
 # Utility for handling environment variables (API keys)
 python-dotenv
+
+# For making HTTP requests to local Ollama
+requests
