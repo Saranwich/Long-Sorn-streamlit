@@ -10,6 +10,7 @@ import pandas as pd
 import subprocess
 import tempfile
 import re
+from collections import Counter
 
 # --- Page Configuration & ENV Loading ---
 st.set_page_config(page_title="LongSorn AI Demo", page_icon="🖊️", layout="wide")
@@ -42,7 +43,6 @@ def convert_audio_with_ffmpeg(input_bytes, suffix):
 
         output_filename = input_filename + ".wav"
         
-        # สร้างคำสั่ง FFmpeg โดยเพิ่ม -t 60 หากไฟล์ยาวเกิน 1 นาที
         command = ["ffmpeg", "-i", input_filename, "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", "-y"]
         if st.session_state.is_trimmed:
             command.extend(["-t", "60"]) # Trim to first 60 seconds
@@ -88,7 +88,6 @@ def find_timestamp_for_phrase(phrase, word_timestamps):
 
     for i in range(len(word_timestamps) - len(words_in_phrase) + 1):
         match = True
-        # ตรวจสอบคำต่อคำ
         for j in range(len(words_in_phrase)):
             if word_timestamps[i+j]['Word'] != words_in_phrase[j]:
                 match = False
@@ -104,7 +103,7 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
     """ฟังก์ชันสำหรับเรียกใช้ Gemini และ Typhoon API เพื่อวิเคราะห์ Transcript จริง"""
     context_prompt = f"Context for the presentation: {description}\n\n" if description else ""
 
-    # ---- Gemini Analysis for General Feedback & Recommendations ----
+    # ---- Gemini Analysis for General Feedback, Recommendations, and Keywords ----
     gemini_feedback = "Not available"
     try:
         genai.configure(api_key=os.getenv("GOOGLE_GEMINI_API_KEY"))
@@ -113,12 +112,15 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
         {context_prompt}Analyze the following teaching transcript in Thai:
         "{transcript}"
         
-        First, provide an evaluation on two metrics in this exact format:
+        1. Provide an evaluation on two metrics in this exact format:
         Pace: [Your Result: Good, Too fast, or Too slow]
         Clarity: [Your Score: 1-10]
         
-        Second, identify up to 3 specific Thai phrases that could be improved. For each, provide the original phrase, a brief reason, and a suggestion for improvement. Use this exact format, with each entry on a new line:
+        2. Identify up to 5 specific Thai phrases that could be improved. For each, provide the original phrase, a brief reason, and a suggestion for improvement. Use this exact format, with each entry on a new line:
         ORIGINAL: [original phrase] | REASON: [reason for improvement] | SUGGESTION: [suggested alternative]
+        
+        3. Extract up to 5 main keywords or topics from the transcript. Use this exact format:
+        KEYWORDS: [keyword1, keyword2, keyword3]
         """
         response = model.generate_content(prompt)
         gemini_feedback = response.text
@@ -147,6 +149,7 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
     # ---- Combine and Process Results ----
     pace = "N/A"
     clarity = 0.0
+    keywords = []
     timeline_feedback = []
     ai_recommendations = []
 
@@ -158,6 +161,9 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
                 clarity = float(line.split("Clarity:")[1].strip())
             except:
                 clarity = 0.0
+        elif "KEYWORDS:" in line:
+            keywords_str = line.split("KEYWORDS:")[1].strip().replace('[', '').replace(']', '')
+            keywords = [k.strip() for k in keywords_str.split(',')]
         elif "ORIGINAL:" in line:
             parts = [p.strip() for p in line.split('|')]
             if len(parts) == 3:
@@ -170,8 +176,9 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
 
     return {
         "speech_analysis": {"Filler Words Detected": filler_word_count, "Speaking Pace": pace, "Clarity Score": clarity},
-        "timeline_feedback": timeline_feedback if timeline_feedback else [{"timestamp": "N/A", "type": "General", "suggestion": "No specific suggestions found."}],
-        "ai_recommendations": ai_recommendations if ai_recommendations else [{"original": "N/A", "suggestion": "No specific recommendations found."}]
+        "keywords": keywords,
+        "timeline_feedback": timeline_feedback,
+        "ai_recommendations": ai_recommendations
     }
 
 # --- Main UI and Processing Logic ---
@@ -182,10 +189,8 @@ st.divider()
 if 'results_ready' in st.session_state and st.session_state.results_ready:
     # --- แสดงหน้าผลลัพธ์ ---
     st.header("AI Analysis Results")
-    
-    # แสดงข้อความเตือนถ้าไฟล์ถูกตัด
     if st.session_state.get("is_trimmed", False):
-        st.warning("⚠️ ไฟล์ของคุณมีความยาวเกิน 1 นาที ระบบได้ทำการวิเคราะห์เฉพาะ 60 วินาทีแรกเท่านั้น หากต้องการวิเคราะห์ไฟล์เต็ม กรุณาอัปเกรดแพ็กเกจ (ฟีเจอร์ในอนาคต)")
+        st.warning("⚠️ ไฟล์ของคุณมีความยาวเกิน 1 นาที ระบบได้ทำการวิเคราะห์เฉพาะ 60 วินาทีแรกเท่านั้น หากต้องการวิเคราะห์ไฟล์เต็ม กรุณาอัปเกรดแพ็กเกจ")
 
     nlp_res = st.session_state.nlp_results
     
@@ -193,19 +198,21 @@ if 'results_ready' in st.session_state and st.session_state.results_ready:
 
     with left_col:
         st.subheader("Presentation Playback")
-        # แสดงวิดีโอ/เสียงที่ผู้ใช้อัปโหลด
         st.video(st.session_state.uploaded_file_content)
         
         st.subheader("Timeline Feedback")
-        for feedback in nlp_res["timeline_feedback"]:
-            with st.container(border=True):
-                r1_col1, r1_col2 = st.columns([1, 4])
-                with r1_col1:
-                    st.write(f"**{feedback['timestamp']}**")
-                with r1_col2:
-                    st.write(f"**{feedback['type']}**")
-                st.info(f"**Suggestion:** {feedback['suggestion']}")
-    
+        if nlp_res["timeline_feedback"]:
+            for feedback in nlp_res["timeline_feedback"]:
+                with st.container(border=True):
+                    r1_col1, r1_col2 = st.columns([1, 4])
+                    with r1_col1:
+                        st.write(f"**{feedback['timestamp']}**")
+                    with r1_col2:
+                        st.write(f"**{feedback['type']}**")
+                    st.info(f"**Suggestion:** {feedback['suggestion']}")
+        else:
+            st.info("ไม่พบจุดที่ต้องแก้ไขใน Timeline Feedback เยี่ยมมาก!")
+
     with right_col:
         st.subheader("Speech Analysis")
         with st.container(border=True):
@@ -216,17 +223,30 @@ if 'results_ready' in st.session_state and st.session_state.results_ready:
         
         st.subheader("AI Recommendations")
         with st.container(border=True):
-            for rec in nlp_res["ai_recommendations"]:
-                if rec['original'] != "N/A":
+            if nlp_res["ai_recommendations"]:
+                for rec in nlp_res["ai_recommendations"]:
                     st.error(f"**Original:** \"_{rec['original']}_\"")
                     st.success(f"**Suggestion:** \"_{rec['suggestion']}_\"")
                     st.divider()
-                else:
-                    st.write(rec['suggestion'])
+            else:
+                st.write("ไม่พบคำแนะนำในการปรับปรุงคำพูดโดยตรง")
 
-        st.subheader("Transcript & Word Timestamps")
-        with st.expander("คลิกเพื่อดู Transcript และข้อมูลเวลาของแต่ละคำ"):
-            st.dataframe(st.session_state.word_timestamps_df, use_container_width=True)
+        st.subheader("Content Analysis")
+        with st.expander("คลิกเพื่อดูการวิเคราะห์เนื้อหา (Keywords & Word Frequency)"):
+            st.write("**Main Keywords:**")
+            if nlp_res["keywords"]:
+                st.write(", ".join(nlp_res["keywords"]))
+            else:
+                st.write("ไม่สามารถสรุปคำสำคัญได้")
+
+            st.write("**Word Frequency:**")
+            word_freq = Counter(st.session_state.word_timestamps_df['Word'].str.lower())
+            # ไม่แสดงคำฟุ่มเฟือยใน word freq
+            for filler in ["เอ่อ", "อ่า", "แบบว่า", "คือ", "นะครับ", "คะ", "ครับ"]:
+                word_freq.pop(filler, None)
+            
+            freq_df = pd.DataFrame(word_freq.most_common(10), columns=['Word', 'Count'])
+            st.dataframe(freq_df, use_container_width=True)
 
     if st.button("Analyze Another"):
         st.session_state.clear()
@@ -269,10 +289,10 @@ else:
     # --- แสดงหน้าอัปโหลด ---
     with st.container(border=True):
         st.header("Upload Your Content")
-        st.subheader("Provide context for AI")
+        st.subheader("1. (Optional) Provide context for AI")
         st.text_area("บอก AI ว่าการสอนนี้เกี่ยวกับอะไร หรืออยากให้เน้นเรื่องไหนเป็นพิเศษ", key="user_description", placeholder="e.g. วิเคราะห์รูปประโยคที่ใช้, อยากให้ช่วยดูการใช้ศัพท์เทคนิค")
         
-        st.subheader("Upload your file")
+        st.subheader("2. Upload your file")
         uploaded_file = st.file_uploader("Click to upload or drag and drop", type=["mp4", "mov", "mp3", "wav", "m4a"], label_visibility="collapsed")
 
         if uploaded_file:
