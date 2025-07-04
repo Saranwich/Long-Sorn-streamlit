@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 
 # --- Page Configuration & ENV Loading ---
-st.set_page_config(page_title="LongSorn AI", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="LongSorn AI", page_icon="🖊️", layout="wide")
 load_dotenv()
 
 # --- Backend Functions (AI Calls) ---
@@ -67,7 +67,7 @@ def run_real_nlp_analysis(transcript: str):
     """
     ฟังก์ชันสำหรับเรียกใช้ Gemini และ Typhoon API เพื่อวิเคราะห์ Transcript จริง
     """
-    # ---- 1. Gemini Analysis for General Feedback ----
+    # ---- Gemini Analysis for General Feedback ----
     gemini_feedback = "Not available"
     try:
         genai.configure(api_key=os.getenv("GOOGLE_GEMINI_API_KEY"))
@@ -89,7 +89,7 @@ def run_real_nlp_analysis(transcript: str):
     except Exception as e:
         st.warning(f"Could not connect to Gemini API: {e}")
 
-    # ---- 2. Typhoon API Analysis for Thai-specific Filler Words ----
+    # ---- Typhoon API Analysis for Thai-specific Filler Words ----
     filler_word_count = 0
     try:
         api_url = os.getenv("TYPHOON_API_URL")
@@ -101,7 +101,7 @@ def run_real_nlp_analysis(transcript: str):
         }
         
         payload = {
-            "model": "typhoon-v2.1-12b-instruct", # ชื่อโมเดลตามที่ผู้ให้บริการกำหนด
+            "model": "typhoon-v2.1-12b-instruct",
             "prompt": f"จากข้อความต่อไปนี้: \"{transcript}\" ช่วยนับจำนวนคำฟุ่มเฟือยของภาษาไทย (เช่น เอ่อ, อ่า, แบบว่า, คือว่า, นะครับ) ว่ามีทั้งหมดกี่คำ ตอบเป็นตัวเลขเท่านั้น",
             "max_tokens": 10
         }
@@ -110,8 +110,6 @@ def run_real_nlp_analysis(transcript: str):
         response.raise_for_status()
         response_json = response.json()
         
-        # การดึงผลลัพธ์อาจจะต้องปรับตาม Response จริงของผู้ให้บริการ
-        # สมมติว่าผลลัพธ์อยู่ใน response_json['choices'][0]['text']
         raw_response = response_json.get("choices", [{}])[0].get("text", "0")
         filler_word_count = int("".join(filter(str.isdigit, raw_response)))
 
@@ -141,48 +139,25 @@ def run_real_nlp_analysis(transcript: str):
     }
 
 # --- Main UI and Processing Logic ---
-st.title("🤖 LongSorn AI")
-if 'analysis_triggered' in st.session_state and st.session_state.analysis_triggered:
-    with st.status("AI is analyzing your content...", expanded=True) as status:
-        status.update(label="กำลังแปลงไฟล์เสียงให้อยู่ในรูปแบบมาตรฐาน...")
-        converted_audio_content, ffmpeg_error = convert_audio_with_ffmpeg(st.session_state.uploaded_file_content)
-        
-        if ffmpeg_error:
-            status.update(label="เกิดข้อผิดพลาดในการแปลงไฟล์!", state="error", expanded=True)
-            st.stop()
-        
-        status.update(label="กำลังประมวลผลเสียง (Speech-to-Text)...")
-        stt_response, stt_error = run_stt_transcription(converted_audio_content)
-        
-        if stt_error:
-            status.update(label="เกิดข้อผิดพลาด!", state="error", expanded=True)
-            st.stop()
-        
-        st.session_state.stt_response = stt_response
-        status.update(label="กำลังวิเคราะห์ด้วยโมเดลภาษา (AI Analysis)...")
-        
-        full_transcript = " ".join(
-            [result.alternatives[0].transcript for result in stt_response.results if result.alternatives]
-        ) if stt_response and stt_response.results else ""
+st.title("🖊️ LongSorn AI")
+st.caption("เครื่องมือสาธิตการทำงานของ AI Pipeline ที่มี UI ใกล้เคียงกับผลิตภัณฑ์จริง")
+st.divider()
 
-        nlp_results = run_real_nlp_analysis(full_transcript)
-        st.session_state.nlp_results = nlp_results
-        
-        status.update(label="การวิเคราะห์เสร็จสิ้น!", state="complete", expanded=False)
-
-    st.session_state.analysis_triggered = False
-    st.session_state.results_ready = True
-
+# --- ตรวจสอบว่าเคยวิเคราะห์เสร็จแล้วหรือยัง ---
 if 'results_ready' in st.session_state and st.session_state.results_ready:
-    st.divider()
+    # --- แสดงหน้าผลลัพธ์ ---
     st.header("AI Analysis Results")
+    st.write("Here's what our AI discovered about your presentation")
+    
     stt_res = st.session_state.stt_response
     nlp_res = st.session_state.nlp_results
     
     left_col, right_col = st.columns(2, gap="large")
+
     with left_col:
         st.subheader("Presentation Playback")
-        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ") # Placeholder
+        
         st.subheader("Timeline Feedback")
         for feedback in nlp_res["timeline_feedback"]:
             with st.container(border=True):
@@ -214,5 +189,73 @@ if 'results_ready' in st.session_state and st.session_state.results_ready:
                 st.dataframe(word_data)
 
     if st.button("Analyze Another"):
-        st.session_state.clear()
+        # ล้างค่าใน session state ทั้งหมดเพื่อกลับไปหน้าอัปโหลด
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
         st.rerun()
+
+elif 'analysis_triggered' in st.session_state and st.session_state.analysis_triggered:
+    # --- แสดงหน้ากำลังประมวลผล ---
+    with st.container(border=True):
+        st.subheader("กำลังประมวลผล")
+        st.write("AI is analyzing your content...")
+        progress_bar = st.progress(0, text="Starting...")
+
+        # Step 1: Convert Audio
+        progress_bar.progress(10, text="กำลังแปลงไฟล์เสียงให้อยู่ในรูปแบบมาตรฐาน...")
+        converted_audio_content, ffmpeg_error = convert_audio_with_ffmpeg(st.session_state.uploaded_file_content)
+        if ffmpeg_error:
+            st.error(f"เกิดข้อผิดพลาดในการแปลงไฟล์: {ffmpeg_error}")
+            st.stop()
+
+        # Step 2: STT
+        progress_bar.progress(40, text="กำลังประมวลผลเสียง (Speech-to-Text)...")
+        stt_response, stt_error = run_stt_transcription(converted_audio_content)
+        if stt_error:
+            st.error(f"เกิดข้อผิดพลาดจาก Speech-to-Text: {stt_error}")
+            st.stop()
+        st.session_state.stt_response = stt_response
+
+        # Step 3: NLP
+        progress_bar.progress(70, text="กำลังวิเคราะห์ด้วยโมเดลภาษา (AI Analysis)...")
+        full_transcript = " ".join(
+            [result.alternatives[0].transcript for result in stt_response.results if result.alternatives]
+        ) if stt_response and stt_response.results else ""
+        nlp_results = run_real_nlp_analysis(full_transcript)
+        st.session_state.nlp_results = nlp_results
+        
+        progress_bar.progress(100, text="การวิเคราะห์เสร็จสิ้น!")
+        time.sleep(1)
+
+        # ตั้งค่าให้ไปหน้าผลลัพธ์
+        st.session_state.analysis_triggered = False
+        st.session_state.results_ready = True
+        st.rerun()
+
+else:
+    # --- แสดงหน้าอัปโหลด ---
+    with st.container(border=True):
+        st.header("Upload Your Content")
+        uploaded_file = st.file_uploader(
+            "Click to upload or drag and drop",
+            type=["mp4", "avi", "mov", "mp3", "wav", "m4a"],
+            label_visibility="collapsed"
+        )
+
+        if uploaded_file is not None:
+            file_size_mb = uploaded_file.size / (1024 * 1024)
+            if file_size_mb > 100:
+                st.error("ไฟล์มีขนาดใหญ่เกิน 100MB กรุณาเลือกไฟล์ใหม่")
+            else:
+                st.info(f"Selected File: **{uploaded_file.name}** ({file_size_mb:.2f} MB)")
+                
+                col1, col2 = st.columns([1, 4])
+                with col1:
+                    if st.button("Upload & Analyze", type="primary", use_container_width=True):
+                        st.session_state.analysis_triggered = True
+                        st.session_state.uploaded_file_content = uploaded_file.getvalue()
+                        st.rerun()
+                with col2:
+                    if st.button("Clear", use_container_width=True):
+                        st.session_state.clear()
+                        st.rerun()
