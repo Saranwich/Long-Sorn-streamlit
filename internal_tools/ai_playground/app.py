@@ -1,5 +1,9 @@
 import streamlit as st
 import os
+from dotenv import load_dotenv
+from google.cloud import speech
+import time
+import pandas as pd
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -8,60 +12,168 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Main UI ---
-st.title("🤖 LongSorn AI Playground")
-st.caption("เครื่องมือสำหรับทดสอบและสาธิตการทำงานของ AI Pipeline")
+# --- Load Environment Variables ---
+# โหลดค่าจากไฟล์ .env | จะมองหา GOOGLE_APPLICATION_CREDENTIALS
+load_dotenv()
 
+# --- Backend Functions AI Calls ---
+
+@st.cache_data
+def run_stt_transcription(audio_file_content):
+    """
+    ฟังก์ชันสำหรับเรียกใช้ Google STT API จริง
+    """
+    try:
+        client = speech.SpeechClient()
+        audio = speech.RecognitionAudio(content=audio_file_content)
+        config = speech.RecognitionConfig(
+            language_code="th-TH",
+            enable_automatic_punctuation=True,
+            enable_word_time_offsets=True, # สำคัญมากสำหรับ Timestamp
+        )
+        
+        response = client.recognize(config=config, audio=audio)
+        return response, None # คืนค่า response และ None สำหรับ error
+    except Exception as e:
+        return None, str(e) # คืนค่า None สำหรับ response และข้อความ error
+
+def run_mock_nlp_analysis(transcript: str):
+    """
+    ฟังก์ชันจำลองการทำงานของ NLP (Gemini/Typhoon)
+    """
+    time.sleep(2) # จำลองการทำงาน
+    
+    # จำลองผลลัพธ์โดยอิงจากความยาวของ transcript
+    filler_word_count = transcript.count("เอ่อ") + transcript.count("แบบว่า")
+    
+    return {
+        "speech_analysis": {
+            "Filler Words Detected": filler_word_count,
+            "Speaking Pace": "Good",
+            "Clarity Score": 8.2
+        },
+        "timeline_feedback": [
+            {"timestamp": "0:01", "type": "Filler Word", "suggestion": "พบคำว่า 'เอ่อ' ลองเว้นจังหวะแทน"},
+            {"timestamp": "0:06", "type": "Filler Word", "suggestion": "พบคำว่า 'แบบว่า' ซึ่งเป็นคำฟุ่มเฟือย"},
+        ],
+        "ai_recommendations": [
+            {"original": "เอ่อ... วันนี้เราก็จะมาเรียนเรื่องการ...", "suggestion": "วันนี้เราจะมาเรียนเรื่อง..."},
+            {"original": "ซึ่งแบบว่ามันเป็นเรื่องที่สำคัญมาก", "suggestion": "ซึ่งเป็นเรื่องที่สำคัญมาก"}
+        ]
+    }
+
+# --- Main UI ---
+
+st.title("🤖 LongSorn AI Playground")
+st.caption("เครื่องมือสาธิตการทำงานของ AI Pipeline ที่มี UI ใกล้เคียงกับผลิตภัณฑ์จริง")
 st.divider()
 
-# --- File Upload ---
-st.header("1. อัปโหลดไฟล์เสียงเพื่อทดสอบ")
-st.write("อัปโหลดไฟล์เสียงที่ต้องการนำไปวิเคราะห์ด้วยโมเดล AI ของเรา (แนะนำ .wav, .mp3, .m4a)")
-
-# สร้างตัวอัปโหลดไฟล์
+# --- Upload ---
+st.header("Upload Your Content")
 uploaded_file = st.file_uploader(
-    "เลือกไฟล์เสียง...",
-    type=["wav", "mp3", "m4a", "flac"] # กำหนดประเภทไฟล์ที่อนุญาต
+    "อัปโหลดไฟล์วิดีโอหรือไฟล์เสียง (จำกัด 1 ไฟล์, สูงสุด 100MB)",
+    type=["mp4", "mov", "mp3", "wav", "m4a"],
+    label_visibility="collapsed"
 )
 
-# --- Step 2: Analysis Trigger ---
-st.header("2. เริ่มการวิเคราะห์")
-
-# ตรวจสอบว่ามีการอัปโหลดไฟล์แล้วหรือยัง
 if uploaded_file is not None:
-    # แสดงชื่อไฟล์ที่อัปโหลด
-    st.success(f"ไฟล์ที่อัปโหลด: `{uploaded_file.name}`")
+    file_size_mb = uploaded_file.size / (1024 * 1024)
+    if file_size_mb > 100:
+        st.error("ไฟล์มีขนาดใหญ่เกิน 100MB กรุณาเลือกไฟล์ใหม่")
+    else:
+        st.info(f"Selected File: **{uploaded_file.name}** ({file_size_mb:.2f} MB)")
+        
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("Upload & Analyze", type="primary", use_container_width=True):
+                st.session_state.clear() # ล้างค่าเก่าทิ้งทั้งหมด
+                st.session_state.analysis_triggered = True
+                st.session_state.uploaded_file_content = uploaded_file.getvalue()
+        with col2:
+            if st.button("Clear", use_container_width=True):
+                st.session_state.clear()
+                st.rerun()
+
+# --- Processing ---
+if 'analysis_triggered' in st.session_state and st.session_state.analysis_triggered:
     
-    # แสดงตัวเล่นไฟล์เสียง
-    st.audio(uploaded_file, format='audio/wav')
-
-    # สร้างปุ่ม "เริ่มวิเคราะห์"
-    if st.button("เริ่มวิเคราะห์ไฟล์นี้", type="primary"):
+    with st.status("AI is analyzing your content...", expanded=True) as status:
+        status.update(label="กำลังแยกและประมวลผลเสียง (Speech-to-Text)...")
         
-        # --- Placeholder for AI Logic ---
-        # นี่คือจุดที่จะเพิ่มโค้ดเรียก AI ในขั้นตอนถัดไป
-        st.info("กำลังเริ่มต้นกระบวนการวิเคราะห์...")
+        # --- เรียกใช้ STT จริง ---
+        stt_response, error = run_stt_transcription(st.session_state.uploaded_file_content)
         
-        with st.spinner('กำลังประมวลผล... กรุณารอสักครู่...'):
-            # TODO: Add function call to Google STT API
-            # TODO: Add function call to Gemini/Typhoon API
-            st.session_state.analysis_complete = True # สมมติว่าทำเสร็จแล้ว
+        if error:
+            status.update(label="เกิดข้อผิดพลาด!", state="error", expanded=True)
+            st.error(f"ไม่สามารถประมวลผล Speech-to-Text ได้: {error}")
+            st.stop() # หยุดการทำงานทันที
+        
+        st.session_state.stt_response = stt_response
+        status.update(label="กำลังวิเคราะห์ด้วยโมเดลภาษา (AI Analysis)...")
+        
+        # --- สร้าง Transcript และเรียกใช้ NLP จำลอง ---
+        full_transcript = " ".join(
+            [result.alternatives[0].transcript for result in stt_response.results]
+        )
+        nlp_results = run_mock_nlp_analysis(full_transcript)
+        st.session_state.nlp_results = nlp_results
+        
+        status.update(label="การวิเคราะห์เสร็จสิ้น!", state="complete", expanded=False)
 
-        st.success("การวิเคราะห์เสร็จสิ้น!")
+    st.session_state.analysis_triggered = False
+    st.session_state.results_ready = True
 
-else:
-    st.warning("กรุณาอัปโหลดไฟล์เสียงก่อนเริ่มการวิเคราะห์")
-
-
-# --- Step 3: Display Results ---
-if 'analysis_complete' in st.session_state and st.session_state.analysis_complete:
+# --- Results ---
+if 'results_ready' in st.session_state and st.session_state.results_ready:
     st.divider()
-    st.header("3. ผลการวิเคราะห์")
+    st.header("AI Analysis Results")
     
-    # Placeholder for results
-    st.write("ผลลัพธ์จากการวิเคราะห์จะแสดงที่นี่...")
-    st.json({
-        "transcript_preview": "สวัสดีครับวันนี้เราจะมาเรียนเรื่อง...",
-        "filler_words_detected": 5,
-        "sentiment": "Positive"
-    })
+    stt_res = st.session_state.stt_response
+    nlp_res = st.session_state.nlp_results
+    
+    left_col, right_col = st.columns(2, gap="large")
+
+    with left_col:
+        st.subheader("Presentation Playback")
+        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ") # Placeholder
+        
+        st.subheader("Timeline Feedback")
+        # --- แสดงผล Timeline Feedback จาก NLP จำลอง ---
+        for feedback in nlp_res["timeline_feedback"]:
+            with st.container(border=True):
+                r1_col1, r1_col2 = st.columns([1, 4])
+                with r1_col1:
+                    st.write(f"**{feedback['timestamp']}**")
+                with r1_col2:
+                    st.write(f"**{feedback['type']}**")
+                st.info(f"**Suggestion:** {feedback['suggestion']}")
+    
+    with right_col:
+        st.subheader("Speech Analysis")
+        with st.container(border=True):
+            analysis = nlp_res["speech_analysis"]
+            st.metric("Filler Words Detected", f"{analysis['Filler Words Detected']} times")
+            st.metric("Speaking Pace", analysis['Speaking Pace'])
+            st.metric("Clarity Score", f"{analysis['Clarity Score']} / 10")
+        
+        st.subheader("Transcript & Word Timestamps")
+        with st.expander("คลิกเพื่อดู Transcript และข้อมูลเวลาของแต่ละคำ"):
+            if not stt_res.results or not stt_res.results[0].alternatives:
+                st.warning("ไม่พบข้อความในไฟล์เสียง")
+            else:
+                full_transcript = " ".join([res.alternatives[0].transcript for res in stt_res.results])
+                st.text_area("Full Transcript", full_transcript, height=150)
+                
+                word_data = []
+                for result in stt_res.results:
+                    for word_info in result.alternatives[0].words:
+                        word_data.append({
+                            "Word": word_info.word,
+                            "Start (s)": f"{word_info.start_time.total_seconds():.2f}",
+                            "End (s)": f"{word_info.end_time.total_seconds():.2f}"
+                        })
+                st.dataframe(word_data)
+
+    if st.button("Analyze Another"):
+        st.session_state.clear()
+        st.rerun()
