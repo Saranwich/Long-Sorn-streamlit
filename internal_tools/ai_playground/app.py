@@ -9,7 +9,6 @@ import time
 import pandas as pd
 import subprocess
 import tempfile
-import re
 from collections import Counter
 
 # --- Page Configuration & ENV Loading ---
@@ -89,26 +88,25 @@ def find_timestamp_for_phrase(phrase, word_timestamps):
 
 def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: str):
     """ฟังก์ชันสำหรับเรียกใช้ Gemini และ Typhoon API เพื่อวิเคราะห์ Transcript จริง"""
-    context_prompt = f"Context for the presentation: {description}\n\n" if description else ""
+    context_prompt = f"User's context for this presentation: {description}\n\n" if description else ""
     
-    # --- Calculate WPM ---
     word_count = len(word_timestamps)
     duration_seconds = float(word_timestamps[-1]['Start (s)']) if word_timestamps else 0
     wpm = (word_count / duration_seconds) * 60 if duration_seconds > 0 else 0
     
-    # --- Gemini Analysis for General Feedback, Recommendations, and Keywords ---
+    # ---- Gemini Analysis for General Feedback, Recommendations, and Keywords ----
     gemini_feedback = "Not available"
     try:
         genai.configure(api_key=os.getenv("GOOGLE_GEMINI_API_KEY"))
         model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = f"""
-        {context_prompt}Analyze the following teaching transcript in Thai. The speaker's pace is approximately {wpm:.0f} words per minute.
+        {context_prompt}You are an expert teaching coach. Analyze the following teaching transcript in Thai. The speaker's pace is approximately {wpm:.0f} words per minute.
         Transcript: "{transcript}"
         
-        1. Provide a Clarity Score (1-10) based on sentence structure and word choice. Use this exact format:
+        1. Provide a Clarity Score (1-10), where 1 is very unclear and 10 is perfectly clear. Base the score on sentence structure, word choice, and conciseness. Use this exact format:
         Clarity: [Your Score]
         
-        2. Identify up to 5 specific Thai phrases that could be improved. For each, provide the original phrase, a brief reason, and a suggestion for improvement. Use this exact format, with each entry on a new line:
+        2. Identify up to 5 specific Thai phrases that could be improved. You MUST find at least 3 points of improvement, even if the transcript is good. If there are no clear errors, suggest ways to make good sentences even better or more impactful. For each, provide the original phrase, a brief reason, and a suggestion. Use this exact format, with each entry on a new line:
         ORIGINAL: [original phrase] | REASON: [reason for improvement] | SUGGESTION: [suggested alternative]
         
         3. Extract up to 5 main keywords or topics from the transcript. Use this exact format:
@@ -119,7 +117,7 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
     except Exception as e:
         st.warning(f"Could not connect to Gemini API: {e}")
 
-    # --- Typhoon API Analysis for Filler Words ---
+    # ---- Typhoon API Analysis for Filler Words ----
     filler_word_count = 0
     try:
         api_url = os.getenv("TYPHOON_API_URL")
@@ -134,13 +132,12 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
     except Exception as e:
         st.warning(f"Could not connect to Typhoon API: {e}")
 
-    # --- Combine and Process Results ---
+    # ---- Combine and Process Results ----
     clarity = 0.0
     keywords = []
     timeline_feedback = []
     ai_recommendations = []
     
-    # Determine Speaking Pace based on WPM
     if wpm < 110: pace = "Too slow"
     elif wpm > 160: pace = "Too fast"
     else: pace = "Good"
@@ -173,7 +170,6 @@ st.caption("เครื่องมือสาธิตการทำงา�
 st.divider()
 
 if 'results_ready' in st.session_state and st.session_state.results_ready:
-    # --- UI: แสดงหน้าผลลัพธ์ ---
     st.header("AI Analysis Results")
     if st.session_state.get("is_trimmed", False):
         st.warning("⚠️ ไฟล์ของคุณมีความยาวเกิน 1 นาที ระบบได้ทำการวิเคราะห์เฉพาะ 60 วินาทีแรกเท่านั้น หากต้องการวิเคราะห์ไฟล์เต็มกรุณาอัปเกรดแพ็กเกจ")
@@ -195,7 +191,7 @@ if 'results_ready' in st.session_state and st.session_state.results_ready:
                     with r1_col2: st.write(f"**{feedback['type']}**")
                     st.info(f"**Suggestion:** {feedback['suggestion']}")
         else:
-            st.info("ไม่พบจุดที่ต้องแก้ไขใน Timeline Feedback เยี่ยมมาก!")
+            st.info("AI ไม่พบจุดที่ต้องแก้ไขใน Timeline เยี่ยมมาก!")
 
     with right_col:
         st.subheader("Speech Analysis")
@@ -204,6 +200,14 @@ if 'results_ready' in st.session_state and st.session_state.results_ready:
             st.metric("Filler Words Detected", f"{analysis['Filler Words Detected']} times")
             st.metric("Speaking Pace", analysis['Speaking Pace'])
             st.metric("Clarity Score", f"{analysis['Clarity Score']:.1f} / 10")
+        
+        st.subheader("Content Analysis")
+        with st.container(border=True):
+            st.write("**Main Keywords:**")
+            if nlp_res["keywords"]:
+                st.text(", ".join(nlp_res["keywords"]))
+            else:
+                st.text("ไม่สามารถสรุปคำสำคัญได้")
         
         st.subheader("AI Recommendations")
         with st.container(border=True):
@@ -215,22 +219,9 @@ if 'results_ready' in st.session_state and st.session_state.results_ready:
             else:
                 st.write("ไม่พบคำแนะนำในการปรับปรุงคำพูดโดยตรง")
 
-        st.subheader("Content Analysis")
-        with st.expander("คลิกเพื่อดูการวิเคราะห์เนื้อหา (Keywords & Word Frequency)"):
-            st.write("**Main Keywords:**")
-            if nlp_res["keywords"]: st.write(", ".join(nlp_res["keywords"]))
-            else: st.write("ไม่สามารถสรุปคำสำคัญได้")
-
-            st.write("**Word Frequency:**")
-            word_freq = Counter(st.session_state.word_timestamps_df['Word'].str.lower())
-            for filler in ["เอ่อ", "อ่า", "แบบว่า", "คือ", "นะครับ", "คะ", "ครับ", "ค่ะ"]: word_freq.pop(filler, None)
-            freq_df = pd.DataFrame(word_freq.most_common(10), columns=['Word', 'Count'])
-            st.dataframe(freq_df, use_container_width=True)
-
     if st.button("Analyze Another"): st.session_state.clear(); st.rerun()
 
 elif 'analysis_triggered' in st.session_state and st.session_state.analysis_triggered:
-    # --- UI: แสดงหน้ากำลังประมวลผล ---
     with st.container(border=True):
         st.subheader("กำลังประมวลผล")
         progress_bar = st.progress(0, text="Starting...")
@@ -275,11 +266,10 @@ elif 'analysis_triggered' in st.session_state and st.session_state.analysis_trig
         st.rerun()
 
 else:
-    # --- UI: แสดงหน้าอัปโหลด ---
     with st.container(border=True):
         st.header("Upload Your Content")
         st.subheader("Provide context for AI")
-        st.text_area("บอก AI ว่าการสอนนี้เกี่ยวกับอะไร หรืออยากให้เน้นเรื่องไหนเป็นพิเศษ", key="user_description", placeholder="e.g. วิเคราะห์รูปประโยคที่ใช้, อยากให้ช่วยดูการใช้ศัพท์เทคนิค")
+        st.text_area("บอก AI ว่าการสอนนี้เกี่ยวกับอะไรหรืออยากให้เน้นเรื่องไหนเป็นพิเศษ", key="user_description", placeholder="e.g. วิเคราะห์รูปประโยคที่ใช้, อยากให้ช่วยดูการใช้ศัพท์เทคนิค")
         
         st.subheader("Upload your file")
         uploaded_file = st.file_uploader("Click to upload or drag and drop", type=["mp4", "mov", "mp3", "wav", "m4a"], label_visibility="collapsed")
