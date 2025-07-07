@@ -87,30 +87,43 @@ def find_timestamp_for_phrase(phrase, word_timestamps):
     return "N/A"
 
 def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: str, lang_code_for_stt: str):
-    """ฟังก์ชันสำหรับเรียกใช้ Gemini และ Typhoon API เพื่อวิเคราะห์ Transcript จริง"""
+    """
+    ฟังก์ชันสำหรับเรียกใช้ Gemini และ Typhoon API เพื่อวิเคราะห์ Transcript จริง
+    (เวอร์ชันปรับปรุง แก้ไขปัญหา Filler Words, Speaking Pace, และ Clarity Score)
+    """
     context_prompt = f"User's context for this presentation: {description}\n\n" if description else ""
     
     word_count = len(word_timestamps)
-    duration_seconds = float(word_timestamps[-1]['Start (s)']) if word_timestamps else 0
+    # FIXED: Ensure duration is at least 1 second to prevent division by zero for very short audio.
+    duration_seconds = float(word_timestamps[-1]['Start (s)']) if word_timestamps and float(word_timestamps[-1]['Start (s)']) > 0 else 1.0
     wpm = (word_count / duration_seconds) * 60 if duration_seconds > 0 else 0
     
     # ---- Language Handling ----
-    # ใช้รหัสภาษาที่ส่งมาจากขั้นตอน STT (เช่น "th-TH" -> "th")
     detected_language = lang_code_for_stt.split('-')[0].lower()
 
-    # ---- Gemini Analysis ----
+    # ---- Gemini Analysis (with Improved Prompting) ----
     gemini_feedback = "Not available"
     try:
         genai.configure(api_key=os.getenv("GOOGLE_GEMINI_API_KEY"))
         model = genai.GenerativeModel('gemini-1.5-flash')
         
+        clarity_prompt_rubric = """
+        Analyze the following transcript. Your persona is a helpful speaking coach who understands that this is a spoken transcript, not a written essay, so you should allow for some natural speech patterns.
+
+        1. Provide a Clarity Score (1-10) based on the following rubric. You MUST provide a brief justification for your score.
+           - 1-3 (Needs Major Improvement): The message is very unclear, rambling, or hard to follow.
+           - 4-6 (Needs Improvement): The message is generally understandable but contains significant awkward phrasing, poor word choice, or unclear sentence structures.
+           - 7-8 (Good): The message is clear and well-structured with only minor issues. The core ideas are easy to follow.
+           - 9-10 (Excellent): The message is exceptionally clear, concise, engaging, and well-articulated.
+           Use this exact format:
+           Clarity: [Your Score] | Justification: [Your brief reason for the score]
+        """
+
         if "th" in detected_language:
             prompt = f"""
-            {context_prompt}You are an expert teaching coach. Analyze the following teaching transcript in Thai. The speaker's pace is approximately {wpm:.0f} words per minute.
-            Transcript: "{transcript}"
-            
-            1. Provide a Clarity Score (1-10), where 1 is very unclear and 10 is perfectly clear. Base the score on sentence structure, word choice, and conciseness. Use this exact format:
-            Clarity: [Your Score]
+            {context_prompt}{clarity_prompt_rubric}
+            The speaker's pace is approximately {wpm:.0f} words per minute.
+            Transcript (Thai): "{transcript}"
             
             2. Identify up to 5 specific Thai phrases that could be improved. You MUST find at least 3 points of improvement, even if the transcript is good. If there are no clear errors, suggest ways to make good sentences even better or more impactful. For each, provide the original phrase, a brief reason, and a suggestion for improvement. Use this exact format, with each entry on a new line:
             ORIGINAL: [original phrase] | REASON: [reason for improvement] | SUGGESTION: [suggested alternative]
@@ -119,12 +132,11 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
             KEYWORDS: [keyword1, keyword2, keyword3]
             """
         else: # English or other languages
+            # FIXED TYPO HERE
             prompt = f"""
-            {context_prompt}You are an expert public speaking coach. Analyze the following transcript in English. The speaker's pace is approximately {wpm:.0f} words per minute.
-            Transcript: "{transcript}"
-
-            1. Provide a Clarity Score (1-10). Use this format:
-            Clarity: [Your Score]
+            {context_prompt}{clarity_prompt_rubric}
+            The speaker's pace is approximately {wpm:.0f} words per minute.
+            Transcript (English): "{transcript}"
 
             2. Identify up to 5 specific phrases that could be improved. You MUST find at least 3 points of improvement. For each, provide the original phrase, a brief reason, and a suggestion. Use this format:
             ORIGINAL: [original phrase] | REASON: [reason for improvement] | SUGGESTION: [suggested alternative]
@@ -138,55 +150,64 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
     except Exception as e:
         st.warning(f"Could not connect to Gemini API: {e}")
 
-    # ---- Typhoon API Analysis (Only for Thai) ----
+    # ---- Filler Word Analysis (CHANGED: More reliable direct counting) ----
     filler_word_count = 0
-    if "th" in detected_language:
-        try:
-            api_url = os.getenv("TYPHOON_API_URL")
-            api_key = os.getenv("TYPHOON_API_KEY")
-            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-            payload = {"model": "typhoon-v2.1-12b-instruct", "messages": [{"role": "user", "content": f"จากข้อความภาษาไทยต่อไปนี้: \"{transcript}\" ช่วยนับจำนวนคำฟุ่มเฟือย (เช่น เอ่อ, อ่า, แบบว่า, คือว่า, นะครับ) ว่ามีทั้งหมดกี่คำ ตอบเป็นตัวเลขเท่านั้น"}], "max_tokens": 10}
-            response = requests.post(api_url, headers=headers, json=payload, timeout=60)
-            response.raise_for_status()
-            response_json = response.json()
-            raw_response = response_json.get("choices", [{}])[0].get("message", {}).get("content", "0")
-            filler_word_count = int("".join(filter(str.isdigit, raw_response)))
-        except Exception as e:
-            st.warning(f"Could not connect to Typhoon API: {e}")
-    else:
-        # Simple filler word count for English
-        english_fillers = ['um', 'uh', 'er', 'ah', 'like', 'actually', 'basically', 'so', 'you know']
-        words = transcript.lower().split()
-        filler_word_count = sum(1 for word in words if word in english_fillers)
+    words_in_transcript = transcript.lower().split()
 
+    if "th" in detected_language:
+        # Define a list of common Thai filler words
+        thai_fillers = ['เอ่อ', 'อ่า', 'คือ', 'แบบว่า', 'แบบ', 'ก็คือ', 'นะครับ', 'นะคะ', 'อะ', 'เอิ่ม', 'อืม']
+        filler_word_count = sum(1 for word in words_in_transcript if word in thai_fillers)
+    else:
+        # Expanded list for English
+        english_fillers = ['um', 'uh', 'er', 'ah', 'like', 'actually', 'basically', 'so', 'you know', 'i mean', 'right']
+        filler_word_count = sum(1 for word in words_in_transcript if word in english_fillers)
 
     # ---- Combine and Process Results ----
     clarity = 0.0
+    clarity_justification = "N/A"
     keywords = []
     timeline_feedback = []
     ai_recommendations = []
     
-    if wpm < 110: pace = "Too slow"
-    elif wpm > 160: pace = "Too fast"
-    else: pace = "Good"
+    # CHANGED: More nuanced speaking pace criteria
+    if wpm < 100: pace = "Very Slow"
+    elif wpm < 120: pace = "A bit slow"
+    elif wpm <= 160: pace = "Good Pace"
+    elif wpm <= 180: pace = "A bit fast"
+    else: pace = "Very Fast"
 
     for line in gemini_feedback.splitlines():
-        if "Clarity:" in line:
-            try: clarity = float(line.split("Clarity:")[1].strip())
-            except: clarity = 0.0
+        # CHANGED: Logic to parse the new Clarity format with justification
+        if "Clarity:" in line and "Justification:" in line:
+            try:
+                parts = line.split('|')
+                clarity_str = parts[0].replace("Clarity:", "").strip()
+                clarity = float(clarity_str)
+                clarity_justification = parts[1].replace("Justification:", "").strip()
+            except:
+                clarity = 0.0
+                clarity_justification = "Could not parse score."
         elif "KEYWORDS:" in line:
             keywords_str = line.split("KEYWORDS:")[1].strip().replace('[', '').replace(']', '')
             keywords = [k.strip() for k in keywords_str.split(',') if k.strip()]
         elif "ORIGINAL:" in line:
             parts = [p.strip() for p in line.split('|')]
             if len(parts) == 3:
-                original = parts[0].replace("ORIGINAL:", "").strip(); reason = parts[1].replace("REASON:", "").strip(); suggestion = parts[2].replace("SUGGESTION:", "").strip()
+                original = parts[0].replace("ORIGINAL:", "").strip()
+                reason = parts[1].replace("REASON:", "").strip()
+                suggestion = parts[2].replace("SUGGESTION:", "").strip()
                 ai_recommendations.append({"original": original, "suggestion": suggestion})
                 timestamp = find_timestamp_for_phrase(original, word_timestamps)
                 timeline_feedback.append({"timestamp": timestamp, "type": reason, "suggestion": suggestion})
 
     return {
-        "speech_analysis": {"Filler Words Detected": filler_word_count, "Speaking Pace": pace, "Clarity Score": clarity},
+        "speech_analysis": {
+            "Filler Words Detected": filler_word_count, 
+            "Speaking Pace": pace, 
+            "Clarity Score": clarity,
+            "Clarity Justification": clarity_justification
+        },
         "keywords": keywords,
         "timeline_feedback": timeline_feedback,
         "ai_recommendations": ai_recommendations
@@ -226,7 +247,8 @@ if 'results_ready' in st.session_state and st.session_state.results_ready:
             analysis = nlp_res["speech_analysis"]
             st.metric("Filler Words Detected", f"{analysis['Filler Words Detected']} times")
             st.metric("Speaking Pace", analysis['Speaking Pace'])
-            st.metric("Clarity Score", f"{analysis['Clarity Score']:.1f} / 10")
+            # MODIFIED: Display the justification below the score
+            st.metric("Clarity Score", f"{analysis.get('Clarity Score', 0.0):.1f} / 10", help=analysis.get('Clarity Justification', 'No justification provided.'))
         
         st.subheader("Content Analysis")
         with st.container(border=True):
