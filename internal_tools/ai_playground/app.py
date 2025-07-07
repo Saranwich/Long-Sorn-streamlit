@@ -86,7 +86,7 @@ def find_timestamp_for_phrase(phrase, word_timestamps):
             return f"{minutes:01d}:{seconds:02d}"
     return "N/A"
 
-def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: str):
+def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: str, lang_code_for_stt: str):
     """ฟังก์ชันสำหรับเรียกใช้ Gemini และ Typhoon API เพื่อวิเคราะห์ Transcript จริง"""
     context_prompt = f"User's context for this presentation: {description}\n\n" if description else ""
     
@@ -94,16 +94,9 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
     duration_seconds = float(word_timestamps[-1]['Start (s)']) if word_timestamps else 0
     wpm = (word_count / duration_seconds) * 60 if duration_seconds > 0 else 0
     
-    # ---- Language Detection ----
-    detected_language = "th" # Default to Thai
-    try:
-        genai.configure(api_key=os.getenv("GOOGLE_GEMINI_API_KEY"))
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        lang_prompt = f"What is the primary language of the following text? Answer with only the two-letter language code (e.g., 'en' for English, 'th' for Thai). Text: \"{transcript[:500]}\""
-        response = model.generate_content(lang_prompt)
-        detected_language = response.text.strip().lower()
-    except Exception:
-        st.warning("Could not detect language, defaulting to Thai.")
+    # ---- Language Handling ----
+    # ใช้รหัสภาษาที่ส่งมาจากขั้นตอน STT (เช่น "th-TH" -> "th")
+    detected_language = lang_code_for_stt.split('-')[0].lower()
 
     # ---- Gemini Analysis ----
     gemini_feedback = "Not available"
