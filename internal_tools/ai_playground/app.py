@@ -88,129 +88,112 @@ def find_timestamp_for_phrase(phrase, word_timestamps):
 
 def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: str, lang_code_for_stt: str):
     """
-    ฟังก์ชันสำหรับเรียกใช้ Gemini และ Typhoon API เพื่อวิเคราะห์ Transcript จริง
-    (เวอร์ชันปรับปรุง แก้ไขปัญหา Filler Words, Speaking Pace, และ Clarity Score)
+    ฟังก์ชันสำหรับเรียกใช้ Gemini วิเคราะห์ Transcript
+    (เวอร์ชัน 4 - Upgraded with Statistical Summary & Pause Analysis)
     """
     context_prompt = f"User's context for this presentation: {description}\n\n" if description else ""
     
+    # --- Pre-calculation of all statistics ---
     word_count = len(word_timestamps)
-    # FIXED: Ensure duration is at least 1 second to prevent division by zero for very short audio.
-    duration_seconds = float(word_timestamps[-1]['Start (s)']) if word_timestamps and float(word_timestamps[-1]['Start (s)']) > 0 else 1.0
+    duration_seconds = float(word_timestamps[-1]['End (s)']) if word_timestamps and float(word_timestamps[-1]['End (s)']) > 0 else 1.0
     wpm = (word_count / duration_seconds) * 60 if duration_seconds > 0 else 0
-    
-    # ---- Language Handling ----
     detected_language = lang_code_for_stt.split('-')[0].lower()
 
-    # ---- Gemini Analysis (with Improved Prompting) ----
+    # Filler word calculation
+    if "th" in detected_language:
+        fillers_list = ['เอ่อ', 'อ่า', 'คือ', 'แบบว่า', 'แบบ', 'ก็คือ', 'นะครับ', 'นะคะ', 'อะ', 'เอิ่ม', 'อืม']
+    else:
+        fillers_list = ['um', 'uh', 'er', 'ah', 'like', 'actually', 'basically', 'so', 'you know', 'i mean', 'right']
+    filler_word_count = sum(1 for word in transcript.lower().split() if word in fillers_list)
+
+    # NEW: Pause Analysis
+    long_pauses = 0
+    pause_threshold = 2.0  # วินาที
+    for i in range(1, len(word_timestamps)):
+        pause_duration = word_timestamps[i]['Start (s)'] - word_timestamps[i-1]['End (s)']
+        if pause_duration >= pause_threshold:
+            long_pauses += 1
+            
+    # --- Construct the Data Summary for the AI ---
+    data_summary = f"""
+    Here is a statistical summary of the speech delivery:
+    - Speaking Pace: {wpm:.0f} words per minute.
+    - Filler Words Count: {filler_word_count} times.
+    - Long Pauses (>{pause_threshold}s): {long_pauses} times.
+    """
+
+    # --- Create the new "Smarter" Prompt ---
     gemini_feedback = "Not available"
     try:
         genai.configure(api_key=os.getenv("GOOGLE_GEMINI_API_KEY"))
         model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        clarity_prompt_rubric = """
-        Analyze the following transcript. Your persona is a helpful speaking coach who understands that this is a spoken transcript, not a written essay, so you should allow for some natural speech patterns.
 
-        1. Provide a Clarity Score (1-10) based on the following rubric. You MUST provide a brief justification for your score.
-           - 1-3 (Needs Major Improvement): The message is very unclear, rambling, or hard to follow.
-           - 4-6 (Needs Improvement): The message is generally understandable but contains significant awkward phrasing, poor word choice, or unclear sentence structures.
-           - 7-8 (Good): The message is clear and well-structured with only minor issues. The core ideas are easy to follow.
-           - 9-10 (Excellent): The message is exceptionally clear, concise, engaging, and well-articulated.
+        # NEW: The prompt now instructs the AI to use the data summary
+        smarter_prompt = f"""
+        {context_prompt}
+        You are an expert speech coach reviewing a presentation. Your analysis MUST be based on BOTH the provided statistical summary and the full transcript.
+
+        {data_summary}
+
+        Based on ALL the information above (statistics and transcript), perform the following analysis:
+
+        1. Overall Clarity Score (1-10): Provide a score and a justification that REFERENCES the statistical data. For example, if the pace is too fast or there are many pauses, mention it as a reason for a lower score.
+           - A clear, competent speaker should score 7-8. Reserve scores below 5 for speakers who are genuinely hard to follow.
            Use this exact format:
-           Clarity: [Your Score] | Justification: [Your brief reason for the score]
+           Clarity: [Your Score] | Justification: [Your brief reason for the score, referencing the statistics]
+
+        2. Key Improvement Suggestions: Identify up to 5 specific phrases or moments from the transcript that could be improved.
+           Use this exact format, with each entry on a new line:
+           ORIGINAL: [original phrase] | REASON: [reason for improvement] | SUGGESTION: [suggested alternative]
+
+        3. Main Keywords: Extract up to 5 main keywords or topics.
+           Use this exact format:
+           KEYWORDS: [keyword1, keyword2, keyword3]
         """
-
-        if "th" in detected_language:
-            prompt = f"""
-            {context_prompt}{clarity_prompt_rubric}
-            The speaker's pace is approximately {wpm:.0f} words per minute.
-            Transcript (Thai): "{transcript}"
-            
-            2. Identify up to 5 specific Thai phrases that could be improved. You MUST find at least 3 points of improvement, even if the transcript is good. If there are no clear errors, suggest ways to make good sentences even better or more impactful. For each, provide the original phrase, a brief reason, and a suggestion for improvement. Use this exact format, with each entry on a new line:
-            ORIGINAL: [original phrase] | REASON: [reason for improvement] | SUGGESTION: [suggested alternative]
-            
-            3. Extract up to 5 main keywords or topics from the transcript based on frequency and relevance. Use this exact format:
-            KEYWORDS: [keyword1, keyword2, keyword3]
-            """
-        else: # English or other languages
-            # FIXED TYPO HERE
-            prompt = f"""
-            {context_prompt}{clarity_prompt_rubric}
-            The speaker's pace is approximately {wpm:.0f} words per minute.
-            Transcript (English): "{transcript}"
-
-            2. Identify up to 5 specific phrases that could be improved. You MUST find at least 3 points of improvement. For each, provide the original phrase, a brief reason, and a suggestion. Use this format:
-            ORIGINAL: [original phrase] | REASON: [reason for improvement] | SUGGESTION: [suggested alternative]
-
-            3. Extract up to 5 main keywords. Use this format:
-            KEYWORDS: [keyword1, keyword2, keyword3]
-            """
-            
-        response = model.generate_content(prompt)
+        
+        full_prompt = f"{smarter_prompt}\n\nFull Transcript:\n\"\"\"\n{transcript}\n\"\"\""
+        
+        response = model.generate_content(full_prompt)
         gemini_feedback = response.text
     except Exception as e:
         st.warning(f"Could not connect to Gemini API: {e}")
 
-    # ---- Filler Word Analysis (CHANGED: More reliable direct counting) ----
-    filler_word_count = 0
-    words_in_transcript = transcript.lower().split()
-
-    if "th" in detected_language:
-        # Define a list of common Thai filler words
-        thai_fillers = ['เอ่อ', 'อ่า', 'คือ', 'แบบว่า', 'แบบ', 'ก็คือ', 'นะครับ', 'นะคะ', 'อะ', 'เอิ่ม', 'อืม']
-        filler_word_count = sum(1 for word in words_in_transcript if word in thai_fillers)
-    else:
-        # Expanded list for English
-        english_fillers = ['um', 'uh', 'er', 'ah', 'like', 'actually', 'basically', 'so', 'you know', 'i mean', 'right']
-        filler_word_count = sum(1 for word in words_in_transcript if word in english_fillers)
-
-    # ---- Combine and Process Results ----
+    # --- Parsing the results (mostly the same) ---
     clarity = 0.0
     clarity_justification = "N/A"
     keywords = []
     timeline_feedback = []
     ai_recommendations = []
     
-    # CHANGED: More nuanced speaking pace criteria
-    if wpm < 100: pace = "Very Slow"
-    elif wpm < 120: pace = "A bit slow"
-    elif wpm <= 160: pace = "Good Pace"
-    elif wpm <= 180: pace = "A bit fast"
+    if wpm < 60: pace = "Very Slow"
+    elif wpm < 100: pace = "Relaxed Pace"
+    elif wpm <= 140: pace = "Good Conversational Pace"
+    elif wpm <= 180: pace = "Energetic Pace"
     else: pace = "Very Fast"
 
     for line in gemini_feedback.splitlines():
-        # CHANGED: Logic to parse the new Clarity format with justification
         if "Clarity:" in line and "Justification:" in line:
             try:
-                parts = line.split('|')
-                clarity_str = parts[0].replace("Clarity:", "").strip()
-                clarity = float(clarity_str)
+                parts = line.split('|'); clarity_str = parts[0].replace("Clarity:", "").strip(); clarity = float(clarity_str)
                 clarity_justification = parts[1].replace("Justification:", "").strip()
             except:
-                clarity = 0.0
-                clarity_justification = "Could not parse score."
+                clarity = 0.0; clarity_justification = "Could not parse score."
         elif "KEYWORDS:" in line:
-            keywords_str = line.split("KEYWORDS:")[1].strip().replace('[', '').replace(']', '')
-            keywords = [k.strip() for k in keywords_str.split(',') if k.strip()]
+            keywords_str = line.split("KEYWORDS:")[1].strip().replace('[', '').replace(']', ''); keywords = [k.strip() for k in keywords_str.split(',') if k.strip()]
         elif "ORIGINAL:" in line:
             parts = [p.strip() for p in line.split('|')]
             if len(parts) == 3:
-                original = parts[0].replace("ORIGINAL:", "").strip()
-                reason = parts[1].replace("REASON:", "").strip()
-                suggestion = parts[2].replace("SUGGESTION:", "").strip()
+                original = parts[0].replace("ORIGINAL:", "").strip(); reason = parts[1].replace("REASON:", "").strip(); suggestion = parts[2].replace("SUGGESTION:", "").strip()
                 ai_recommendations.append({"original": original, "suggestion": suggestion})
                 timestamp = find_timestamp_for_phrase(original, word_timestamps)
                 timeline_feedback.append({"timestamp": timestamp, "type": reason, "suggestion": suggestion})
 
     return {
         "speech_analysis": {
-            "Filler Words Detected": filler_word_count, 
-            "Speaking Pace": pace, 
-            "Clarity Score": clarity,
-            "Clarity Justification": clarity_justification
+            "Filler Words Detected": filler_word_count, "Speaking Pace": pace, "Clarity Score": clarity,
+            "Clarity Justification": clarity_justification, "Long Pauses": long_pauses
         },
-        "keywords": keywords,
-        "timeline_feedback": timeline_feedback,
-        "ai_recommendations": ai_recommendations
+        "keywords": keywords, "timeline_feedback": timeline_feedback, "ai_recommendations": ai_recommendations
     }
 
 # --- Main UI and Processing Logic ---
@@ -245,9 +228,11 @@ if 'results_ready' in st.session_state and st.session_state.results_ready:
         st.subheader("Speech Analysis")
         with st.container(border=True):
             analysis = nlp_res["speech_analysis"]
-            st.metric("Filler Words Detected", f"{analysis['Filler Words Detected']} times")
-            st.metric("Speaking Pace", analysis['Speaking Pace'])
-            # MODIFIED: Display the justification below the score
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Speaking Pace", analysis.get('Speaking Pace', 'N/A'))
+            col2.metric("Filler Words", f"{analysis.get('Filler Words Detected', 0)} times")
+            col3.metric("Long Pauses (>2s)", f"{analysis.get('Long Pauses', 0)} times")
+            
             st.metric("Clarity Score", f"{analysis.get('Clarity Score', 0.0):.1f} / 10", help=analysis.get('Clarity Justification', 'No justification provided.'))
         
         st.subheader("Content Analysis")
@@ -257,8 +242,8 @@ if 'results_ready' in st.session_state and st.session_state.results_ready:
                 st.text(", ".join(nlp_res["keywords"]))
     
         st.subheader("AI Recommendations")
-        with st.container(border=True):
-            if nlp_res["ai_recommendations"]:
+        if nlp_res["ai_recommendations"]:
+            with st.expander("คลิกเพื่อดูคำแนะนำในการปรับปรุงประโยคทั้งหมด", expanded=True): # สามารถเปลี่ยน expanded=False ถ้าต้องการให้มันถูกซ่อนไว้ก่อน
                 for rec in nlp_res["ai_recommendations"]:
                     st.error(f"**Original:** \"_{rec['original']}_\"")
                     st.success(f"**Suggestion:** \"_{rec['suggestion']}_\"")
@@ -301,10 +286,18 @@ elif 'analysis_triggered' in st.session_state and st.session_state.analysis_trig
         if stt_error: st.error(f"STT Error: {stt_error}"); st.stop()
         
         full_transcript = " ".join([res.alternatives[0].transcript for res in stt_response.results if res.alternatives])
+        # --- NEW: Add this check for empty transcript ---
+        if not full_transcript.strip():
+            st.error("Error: ไม่สามารถตรวจจับคำพูดใดๆ ในไฟล์เสียงได้ กรุณาตรวจสอบไฟล์แล้วลองอีกครั้ง")
+            st.stop() # Stop the execution
         word_timestamps = []
         for result in stt_response.results:
             for word_info in result.alternatives[0].words:
-                word_timestamps.append({"Word": word_info.word, "Start (s)": f"{word_info.start_time.total_seconds():.2f}"})
+                word_timestamps.append({
+                    "Word": word_info.word,
+                    "Start (s)": word_info.start_time.total_seconds(),
+                    "End (s)": word_info.end_time.total_seconds()
+                })
         st.session_state.word_timestamps_df = pd.DataFrame(word_timestamps)
 
         progress_bar.progress(70, text="กำลังวิเคราะห์ด้วยโมเดลภาษา...")
