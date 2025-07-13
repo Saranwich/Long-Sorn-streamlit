@@ -18,6 +18,8 @@ dist/
 # ไฟล์ที่สร้างโดย IDE หรือ Editor
 .vscode/
 .idea/
+.devcontainer
+.devcontainer/
 
 # ไฟล์ขยะจากระบบปฏิบัติการ
 .DS_Store
