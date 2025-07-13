@@ -11,6 +11,8 @@ import tempfile
 from collections import Counter
 from google.oauth2 import service_account
 
+# --- Page Configuration & ENV Loading ---
+st.set_page_config(page_title="LongSorn AI Demo", page_icon="🖊️", layout="wide")
 
 # --- Backend Functions (AI Calls) ---
 def get_audio_duration(file_path):
