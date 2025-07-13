@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import json
 import requests
+from dotenv import load_dotenv
 from google.cloud import speech
 import google.generativeai as genai
 import time
@@ -9,8 +10,21 @@ import pandas as pd
 import subprocess
 import tempfile
 from collections import Counter
-from google.oauth2 import service_account
 
+# --- Page Configuration & ENV Loading ---
+st.set_page_config(page_title="LongSorn AI Demo", page_icon="🖊️", layout="wide")
+load_dotenv()
+
+# --- โค้ดนักสืบ (เพิ่มตรงนี้) ---
+credential_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+print(f"🕵️‍♂️ Path ที่อ่านได้จาก .env คือ: {credential_path}")
+
+if credential_path:
+    is_file_found = os.path.exists(credential_path)
+    print(f"🤔 ไฟล์นี้มีอยู่จริงไหม?: {is_file_found}")
+else:
+    print("❌ ไม่เจอตัวแปร GOOGLE_APPLICATION_CREDENTIALS เลย!")
+# --- จบโค้ดนักสืบ ---
 
 # --- Backend Functions (AI Calls) ---
 def get_audio_duration(file_path):
@@ -52,11 +66,7 @@ def convert_audio_with_ffmpeg(input_bytes, suffix, trim_duration=None):
 def run_stt_transcription(audio_file_content, language_code="th-TH"):
     """ฟังก์ชันสำหรับเรียกใช้ Google STT API จริง (สำหรับไฟล์สั้น < 1 นาที)"""
     try:
-        gcp_credentials_json = st.secrets["GCP_CREDENTIALS"]
-        credentials_dict = json.loads(gcp_credentials_json)
-        credentials = service_account.Credentials.from_service_account_info(credentials_dict)
-
-        client = speech.SpeechClient(credentials=credentials)
+        client = speech.SpeechClient()
         audio = speech.RecognitionAudio(content=audio_file_content)
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
@@ -126,7 +136,7 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
     # --- Create the new "Smarter" Prompt ---
     gemini_feedback = "Not available"
     try:
-        genai.configure(api_key=st.secrets["GOOGLE_GEMINI_API_KEY"]) #
+        genai.configure(api_key=os.getenv("GOOGLE_GEMINI_API_KEY"))
         model = genai.GenerativeModel('gemini-1.5-flash')
 
         # NEW: The prompt now instructs the AI to use the data summary
