@@ -15,6 +15,17 @@ from collections import Counter
 st.set_page_config(page_title="LongSorn AI Demo", page_icon="🖊️", layout="wide")
 load_dotenv()
 
+# --- โค้ดนักสืบ (เพิ่มตรงนี้) ---
+credential_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+print(f"🕵️‍♂️ Path ที่อ่านได้จาก .env คือ: {credential_path}")
+
+if credential_path:
+    is_file_found = os.path.exists(credential_path)
+    print(f"🤔 ไฟล์นี้มีอยู่จริงไหม?: {is_file_found}")
+else:
+    print("❌ ไม่เจอตัวแปร GOOGLE_APPLICATION_CREDENTIALS เลย!")
+# --- จบโค้ดนักสืบ ---
+
 # --- Backend Functions (AI Calls) ---
 def get_audio_duration(file_path):
     """ใช้ ffprobe เพื่อหาความยาวของไฟล์เสียง/วิดีโอ"""
@@ -138,17 +149,17 @@ def run_real_nlp_analysis(transcript: str, word_timestamps: list, description: s
         Based on ALL the information above (statistics and transcript), perform the following analysis:
 
         1. Overall Clarity Score (1-10): Provide a score and a justification that REFERENCES the statistical data. For example, if the pace is too fast or there are many pauses, mention it as a reason for a lower score.
-           - A clear, competent speaker should score 7-8. Reserve scores below 5 for speakers who are genuinely hard to follow.
-           Use this exact format:
-           Clarity: [Your Score] | Justification: [Your brief reason for the score, referencing the statistics]
+        - A clear, competent speaker should score 7-8. Reserve scores below 5 for speakers who are genuinely hard to follow.
+        Use this exact format:
+        Clarity: [Your Score] | Justification: [Your brief reason for the score, referencing the statistics]
 
         2. Key Improvement Suggestions: Identify up to 5 specific phrases or moments from the transcript that could be improved.
-           Use this exact format, with each entry on a new line:
-           ORIGINAL: [original phrase] | REASON: [reason for improvement] | SUGGESTION: [suggested alternative]
+        Use this exact format, with each entry on a new line:
+        ORIGINAL: [original phrase] | REASON: [reason for improvement] | SUGGESTION: [suggested alternative]
 
         3. Main Keywords: Extract up to 5 main keywords or topics.
-           Use this exact format:
-           KEYWORDS: [keyword1, keyword2, keyword3]
+        Use this exact format:
+        KEYWORDS: [keyword1, keyword2, keyword3]
         """
         
         full_prompt = f"{smarter_prompt}\n\nFull Transcript:\n\"\"\"\n{transcript}\n\"\"\""
@@ -279,7 +290,7 @@ elif 'analysis_triggered' in st.session_state and st.session_state.analysis_trig
         # A simple heuristic for language detection
         lang_code_for_stt = "th-TH" # Default to Thai
         if st.session_state.get("user_description", "").lower().strip() == "english":
-             lang_code_for_stt = "en-US"
+            lang_code_for_stt = "en-US"
 
         progress_bar.progress(40, text=f"กำลังแปลงเสียงเป็นข้อความ... ({lang_code_for_stt})...")
         stt_response, stt_error = run_stt_transcription(converted_audio, lang_code_for_stt)

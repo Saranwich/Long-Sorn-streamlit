@@ -1,3 +1,30 @@
+#venv
 .env
-backend/services/api-server/app/__pycache__/main.cpython-311.pyc
-backend/shared/db/__pycache__/database.cpython-311.pyc
+venv/
+.venv/
+*/.venv/
+
+# ไฟล์ Cache ของ Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# โฟลเดอร์ที่เกิดจากการติดตั้งหรือ Build
+build/
+dist/
+*.egg-info/
+
+# ไฟล์ที่สร้างโดย IDE หรือ Editor
+.vscode/
+.idea/
+
+# ไฟล์ขยะจากระบบปฏิบัติการ
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+#apikey
+longsorn-ai-demo-gcp-key.json
